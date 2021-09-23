@@ -25,14 +25,46 @@ implement all the remaining 6502 instructions.
 
 #### Run
 
+Jetpak is written in `go`.  If you don't have that, get it hyair...
+
+https://golang.org/doc/install
+
 The current implementation loads `Monty_on_the_Run.sid` and write the output AVR assembler to standard out.
 This assembler is compatible with `AVR-GCC`.
 
-  `go run jetpack.go >mort.avr.s`
+    go run jetpack.go >mort.avr.s
+
+While Jetpack sources the binary from `Monty_on_the_Run.sid`, the repo also contains the disassembled 6502 binary as
+`motr.6502.asm`.  This is handy when developing Jetpack and when comparing the cross-assembled output.
+
+The last version of the output is included in the repo as `mort.avr.s`
+
+#### Pros and cons of cross-assembly vs emulation
+
+##### Pros
+
+- Speed. Many instructions have a single instruction equivalent. For those that don't, the 6502 instruction often
+consumes several processor cycles anyway. While the AVR equivalent sometimes uses more instructions,
+each typically execute in 1 or 2 cycles. On average, it's probably faster than emulation.
+
+- Statically compiled simplicity. Assuming the cross-assemble was successful, no need not worry about dealing with an emulator.
+Emulation on AVRs with limited memory would still need to deal with a partial memory block, rather than the full 64K.
+This was the main driver for the project. Emulation might be more accurate, but I was just targeting one piece of code.
+Not to mention it being a cool challenge.
+
+- Call functions direct from C etc.
+
+##### Cons
+
+- Statically compiled. Unable to execute arbitrary code from SRAM.
+
+- Code density. 6502 code is much denser than the cross compile. For large code blocks emulation is perhaps preferred.
+
+- Can't cover all corner cases or self-modifying code that emulation can.
 
 #### Example cross assembly
 
-#### 6502 input
+##### 6502 input
 
     8367   A0 FF      L8367     LDY #$FF
     8369   AD FB 84             LDA $84FB
@@ -50,7 +82,7 @@ This assembler is compatible with `AVR-GCC`.
     8385   D0 05                BNE L838C
     8387   2C FC 84             BIT $84FC
 
-#### AVR output
+##### AVR output
 
     L8367:    ldi r18, 0xff                 ; LDY #$ff
     L8369:    lds r16, ram+0x00fb           ; LDA $84fb
@@ -79,3 +111,4 @@ This assembler is compatible with `AVR-GCC`.
               sen
               sbrc r20, 6
               sev
+              
