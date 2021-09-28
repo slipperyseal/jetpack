@@ -2,26 +2,23 @@
 
 ### 6502 to AVR cross assembler
 
-SID chip tunes are 6502 processor code and binary data which actually ran on the Commodore 64.
-But rather than try to squeeze a 6502 emulator on the AVR, I cross assembled the play routine and data.
-I mapped 65 of the 6502s 151 instructions to AVR assembler, intercepted write the SID chip at $d4xx and
-handled one piece of self modifying code.
+SID chip tunes are 6502 processor code and binary data which actually run on the Commodore 64.
+Rather than try to squeeze a 6502 emulator on the AVR, Jetpack cross assembles the play routine and data.
+More than 60 of the 6502s 151 instructions are mapped to AVR assembler and writes the SID chip are intercepted.
+It searches execution paths to determine code block boundaries.
+While many 6502 instructions are implemented, there are more to be mapped.
+Special cases are also implemented to deal with self modifying code. 
 
-Monty playing the Monty On The Run chip tune by Rob Hubbard.
-
-[![Monty](https://img.youtube.com/vi/i0d1r9NZg9I/0.jpg)](https://www.youtube.com/watch?v=i0d1r9NZg9I)
-
-https://www.youtube.com/watch?v=i0d1r9NZg9I
-
-#### Status
-
-The current implemention was written specifically (or at least initially) to cross-compile the
+The current implemention was written (at least initially) to cross-compile the
 Monty On The Run SID tune, to the AVR to run on the Monty Stereo SID Synth.
 
 https://github.com/slipperyseal/monty
 
-The plan is to make Jetpack more generic, self-configuring (in detecting data and code boundaries etc) and
-implement all the remaining 6502 instructions.
+Monty playing the Monty On The Run chip tune by Rob Hubbard...
+
+[![Monty](https://img.youtube.com/vi/i0d1r9NZg9I/0.jpg)](https://www.youtube.com/watch?v=i0d1r9NZg9I)
+
+https://www.youtube.com/watch?v=i0d1r9NZg9I
 
 #### Run
 
@@ -29,15 +26,23 @@ Jetpak is written in `go`.  If you don't have that, get it hyair...
 
 https://golang.org/doc/install
 
-The current implementation loads `Monty_on_the_Run.sid` and write the output AVR assembler to standard out.
-This assembler is compatible with `AVR-GCC`.
+Jetpack loads SID files and writes the AVR assembler to standard out. This assembler is compatible with `AVR-GCC`.
 
-    go run jetpack.go >mort.avr.s
+    go run jetpack.go Monty_on_the_Run.sid >mort.avr.s
 
-While Jetpack sources the binary from `Monty_on_the_Run.sid`, the repo also contains the disassembled 6502 binary as
-`motr.6502.asm`.  This is handy when developing Jetpack and when comparing the cross-assembled output.
+Jetpack was originally written to convert `Monty_on_the_Run.sid` and has support for its self modifying code.
+Other SIDs have been successfully converted, but success depends on how that code works,
+self-modifying code being the main issue. 6502 code might replace its own instructions in memory or
+immediate values loaded by instructions. AVR code exists in flash memory, not SRAM, plus the replacement of
+AVR code or data might not be practical solution anyway. These cases need to be identified and dealt with independently. 
 
-The last version of the output is included in the repo as `mort.avr.s`
+Jetpack currently detects the filename of `Monty_on_the_Run.sid` and
+enables the special cases to convert this file.
+
+The latest version of the output is included in the repo as `mort.avr.s`
+
+The repo also contains the disassembled 6502 binary as `motr.6502.asm`.
+This is handy when developing Jetpack and when comparing the cross-assembled output.
 
 #### Pros and cons of cross-assembly vs emulation
 
@@ -49,8 +54,8 @@ each typically execute in 1 or 2 cycles. On average, it's probably faster than e
 
 - Statically compiled simplicity. Assuming the cross-assemble was successful, no need not worry about dealing with an emulator.
 Emulation on AVRs with limited memory would still need to deal with a partial memory block, rather than the full 64K.
-This was the main driver for the project. Emulation might be more accurate, but I was just targeting one piece of code.
-Not to mention it being a cool challenge.
+This was the main driver for the project. Emulation might be more accurate, but the project was originally targeting one piece of code
+(not to mention it being a cool challenge).
 
 - Call functions direct from C etc.
 
