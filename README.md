@@ -44,6 +44,15 @@ The latest version of the output is included in the repo as `mort.avr.s`
 The repo also contains the disassembled 6502 binary as `motr.6502.asm`.
 This is handy when developing Jetpack and when comparing the cross-assembled output.
 
+Jetpack also generates a memory map. 256 x 256 pixels represent 64K of memory. 
+
+- Red: code
+- Dark Green: data (or blank space or unrecognized code within the binary)
+- White: Jump points within code. Target locations of JMP, JSRs and branch instructions.
+- Bright Green: Absolute data read and write points (which may have indexes applied).
+
+<img src="https://github.com/slipperyseal/jetpack/blob/main/Monty_on_the_Run.sid.memory.png?raw=true" width="512">
+
 #### Pros and cons of cross-assembly vs emulation
 
 ##### Pros
