@@ -7,7 +7,7 @@ Rather than try to squeeze a 6502 emulator on the AVR, Jetpack cross assembles t
 More than 60 of the 6502s 151 instructions are mapped to AVR assembler and writes the SID chip are intercepted.
 It searches execution paths to determine code block boundaries.
 While many 6502 instructions are implemented, there are more to be mapped.
-Special cases are also implemented to deal with self modifying code. 
+Special cases are also implemented to deal with self-modifying code. 
 
 The current implemention was written (at least initially) to cross-compile the
 Monty On The Run SID tune, to the AVR to run on the Monty Stereo SID Synth.
@@ -30,7 +30,7 @@ Jetpack loads SID files and writes the AVR assembler to standard out. This assem
 
     go run jetpack.go Monty_on_the_Run.sid >mort.avr.s
 
-Jetpack was originally written to convert `Monty_on_the_Run.sid` and has support for its self modifying code.
+Jetpack was originally written to convert `Monty_on_the_Run.sid` and has support for its self-modifying code.
 Other SIDs have been successfully converted, but success depends on how that code works,
 self-modifying code being the main issue. 6502 code might replace its own instructions in memory or
 immediate values loaded by instructions. AVR code exists in flash memory, not SRAM, plus the replacement of
@@ -125,4 +125,59 @@ This was the main driver for the project. Emulation might be more accurate, but 
               sen
               sbrc r20, 6
               sev
-              
+
+## How it works
+
+With each 6502 instruction represented as a single byte, often followed by a fixed size immediate value, it’s quite simple to decode the instructions.
+Each 6502 instruction is represented with one or more AVR instructions that perform the equivalent operation.
+We assign AVR registers to represent those of the 6502, the `Accumulator`, `X` and `Y`.
+For many instructions there is a simple one-to-one equivalent. For others, multiple AVR instructions are required.
+
+The AVR has instructions dedicated to loading and storing from memory, while algorithmic operations only operate on registers.
+The 6502 can perform algorithmic operations direct to memory and have indexed modes built directly into those instructions.
+
+Where the translation becomes more nuanced is the interaction of status flags.
+Code functions by the way status flags, such as `zero`, `carry`, `minus` and `overflow`, bringing state to subsequent instructions.
+6502 instructions test some of these flags on load instructions, while the AVR instructions do not.
+Also, the `carry` flag represents a fundamentally different thing on the AVR.
+It’s essentially inverted. We need special handling for some status flags.
+This includes protecting the `carry` flag while we use it to perform supportive operations which would modify its state.
+Static analysis can detect where status flags need to be tested or preserved, allowing those extra AVR instructions to be omitted.
+
+Code and data are often found in the same binary.
+It’s not necessarily easy to know what is code and what is data.
+And of that data, which is read only and what is modified.
+Knowing this helps optimisation, of what can be stored in more abundant flash memory and what in more constrained SRAM.
+For data access, the 6502 has essentially 4 addressing modes (there are more specific modes, these are summarized):
+- Immediate. Data is located with the instruction. Easy.
+- Absolute address. Also easy. This relates to a specific memory location.
+- Absolute address, indexed. We know the base address, but the index is a runtime value. Data could be within 256 bytes of this.
+- Indirect, indexed, via pointers in zero page. zOMG! [That could be anywhere.](https://www.youtube.com/watch?v=--9kqhzQ-8Q)
+
+It is assumed that we know the entry point of all code being called (this would be necessary even with emulation).
+For SID files, the `init` and `play` addresses are supplied in the file.
+Our first parse of the binary follows these code paths, marking a map of code points in a bitset.
+We also store the jump and branch points (this is helpful when generating labels later).
+Anything within the binary which is not code is assumed to be data.
+This could be padding between code or actual data.
+Absolute address writes into the identified code spaces tip us off to existence of self-modifying code.
+
+The simplest solution is to cross assemble the code, which will be stored in flash, and then place the entire binary block, containing the 6502 code and data, in SRAM.
+We don’t assume the AVR has 64k of SRAM.
+Memory addresses have the base address of the binary block subtracted, reducing the memory space to effectively the size of the binary.
+Using the code bitset could further help narrow the size of the binary block, excluding the unneeded 6502 machine code from it.
+Or in the case of `Monty On The Run` we know that data starts at `$8400`, so we override that manually.
+
+Writes to “zero page” (the first 256 bytes of RAM) are handled as a special case.
+Reads and write addresses to zero page are tracked to narrow its memory requirements.
+There are indirect pointer instructions that allow placing pointers in zero page addresses.
+Often code will only use a small section of zero page for storing these indirect pointers.
+
+As another dimension to this challenge, 6502 code would often be self-modifying.
+Code would swap out instructions or modify immediate instruction parameters which will be statically compiled for the AVR.
+Monty On The Run has one piece of self-modifying code and currently it’s dealt with as a special case with custom AVR code.
+
+Other cases where translation may not function correctly is where the 6502 code relies on specific behaviour of the processor.
+For example, saving the status register and testing bits within it. While Jetpack can `push` and `pop` the status register to the stack,
+it is the AVR status register, whose flags are in different locations.  6502 code which self-modifies jump or branch addresses
+would also be a problem.
