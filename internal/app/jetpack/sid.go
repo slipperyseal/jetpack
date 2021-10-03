@@ -79,7 +79,6 @@ func writeMontyFunctions()  {
 	fmt.Printf("    clr %s\n", REGX)
 	fmt.Printf("    clr %s\n", REGY)
 	fmt.Printf("    clr %s\n", REGZ)
-	fmt.Printf("    ldi %s, 0x01\n", REGW)
 	fmt.Printf("    rjmp L%04x\n\n", flattenJumpAddress(sidHeader.InitAddress))
 
 	fmt.Printf(".global sid_play\n")
@@ -89,7 +88,6 @@ func writeMontyFunctions()  {
 	fmt.Printf("    clr %s\n", REGX)
 	fmt.Printf("    clr %s\n", REGY)
 	fmt.Printf("    clr %s\n", REGZ)
-	fmt.Printf("    ldi %s, 0x01\n", REGW)
 	fmt.Printf("    rjmp L%04x\n\n", flattenJumpAddress(sidHeader.PlayAddress))
 
 	fmt.Printf("sid_write:\n")				// REGU = address, REGT = value

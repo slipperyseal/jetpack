@@ -12,15 +12,17 @@ import (
 
 var sidHeader = SidHeader{}
 var data []byte
+var loadAddress uint16
 var pc uint16			// 6502 program counter
 var ramStart uint16		// offset at which ram block starts
 var ramLen uint16		// length of ram block
 var maxZero uint8 = 0   // often only the lower bit of zero page are used, so we track the highest read or write
 var totalInstructions = 0
 var totalOpcodes = make(map[byte]byte)
-var codeMap [0x10000]bool
-var storeMap [0x10000]bool
-var loadMap [0x10000]bool
+var codeMap [0x10000]bool	// code at this address
+var storeMap [0x10000]bool  // absolute or indexed store to this address
+var loadMap [0x10000]bool	// absolute or indexed load from this address
+var voidMap [0x10000]bool	// potentially eliminated code (if not in codeMap) but could have been kept on an alternate search.
 var codeBlocks = make(map[uint16]uint16)
 var jumpPoints = make(map[uint16]bool)
 var printAllLabels = false
@@ -39,19 +41,20 @@ func BlastOff(path string) {
 
 	saveBinary(path + ".bin")
 
-	ramStart = sidHeader.LoadAddress
+	loadAddress = sidHeader.LoadAddress
+	ramStart = loadAddress
 	if motr {
 		ramStart = 0x8400
 	}
-	ramLen = uint16(len(data)) - (ramStart - sidHeader.LoadAddress)
+	ramLen = uint16(len(data)) - (ramStart - loadAddress)
 
 	writePrefix()
 	writeSidInfo(path)
 	writeMontyFunctions()
 
-	searchCodeBlocks(flattenJumpAddress(sidHeader.InitAddress))
-	searchCodeBlocks(flattenJumpAddress(sidHeader.PlayAddress))
-	scanCodeBlocks()
+	searchCodeBlocks(sidHeader.InitAddress)
+	searchCodeBlocks(sidHeader.PlayAddress)
+	printCodeBlocks()
 	transcodeBlocks()
 
 	writeRamSpaces()
@@ -105,7 +108,7 @@ func writeSuffix()  {
 }
 
 func writeBinary() {
-	dataOff := int(ramStart - sidHeader.LoadAddress) & 0xffff
+	dataOff := ramStart - loadAddress
 	l := int(ramLen) & 0xffff
 	col := 0
 	for b := 0; b < l; b++ {
@@ -113,7 +116,7 @@ func writeBinary() {
 			fmt.Printf("    .ascii \"")
 		}
 		col++
-		fmt.Printf("\\%03o", data[dataOff+b])
+		fmt.Printf("\\%03o", data[int(dataOff)+b])
 		if col == 24 {
 			fmt.Printf("\"\n")
 			col = 0
@@ -140,42 +143,47 @@ func saveBinary(filename string) {
 // while we can add tst instructions, we can also check the next instruction to see if the flags are overwritten,
 // making any tst on the current instruction obsolete.
 func nextSetsNZ() bool {
-	return InstructionsSetNV[data[pc-sidHeader.LoadAddress]]
+	return InstructionsSetNV[data[pc-loadAddress]]
 }
 
 // fetches the the next byte and returns the calculated PC relative address. for branch instructions.
-// increments the program counter and marking the code map
-func relative8() uint16 {
+// increment the program counter and mark the code map
+func nextByteRelativeAddress() uint16 {
 	return uint16( int32(pc & 0xffff) + int32(int8(nextByte())) )
 }
 
-// get the next byte and increment the program counter and marking the code map
+func byteAt(addr uint16) uint8 {
+	return data[addr-loadAddress]
+}
+
+// get the next byte and increment the program counter and mark the code map
 func nextByte() uint8 {
-	v := data[pc-sidHeader.LoadAddress]
+	v := byteAt(pc)
 	codeMap[pc] = true
 	pc++
 	return v
 }
 
-func byteAt(addr uint16) uint8 {
-	return data[addr-sidHeader.LoadAddress]
+func wordAt(addr uint16) uint16 {
+	return (uint16)(data[addr-loadAddress + 1]) << 8 | (uint16)(data[addr-loadAddress])
 }
 
-// get the next word and increment the program counter and marking the code map
+// get the next word and increment the program counter and mark the code map
 func nextWord() uint16 {
-	v := (uint16)(data[pc-sidHeader.LoadAddress + 1]) << 8 | (uint16)(data[pc-sidHeader.LoadAddress])
+	v := wordAt(pc)
 	codeMap[pc] = true
 	codeMap[pc+1] = true
 	pc+=2
 	return v
 }
 
-func wordAt(addr uint16) uint16 {
-	return (uint16)(data[addr-sidHeader.LoadAddress + 1]) << 8 | (uint16)(data[addr-sidHeader.LoadAddress])
-}
-
+// if the address contains a jump instruction, follow all jumps to their final address.
+// this helps eliminate jump tables and indirect jumps used by shorter range branch instructions.
 func flattenJumpAddress(addr uint16) uint16 {
 	for byteAt(addr) == JMP {
+		voidMap[addr] = true	// mark potential elimination of this instruction
+		voidMap[addr+1] = true  // if not required on other paths
+		voidMap[addr+2] = true
 		addr = wordAt(addr+1)
 	}
 	return addr
@@ -249,7 +257,6 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("          eor %s, %s\n", REGA, REGT)
 		case CMP:
 			immediate("cpi", REGA, "CMP")
-			invertCarry()
 		case CMP_A:
 			addr := nextWord()
 			fmt.Printf("lds %s, ram+0x%04x           ; CMP $%04x\n", REGT, addr-ramStart, addr)
@@ -258,13 +265,10 @@ func transcode(address uint16, stop uint16) {
 		case CMP_X:
 			loadIndexed(REGT, REGX, "CMP", "X")
 			fmt.Printf("          cp %s, %s\n", REGA, REGT)
-			invertCarry()
 		case CPX:
 			immediate("cpi", REGX, "CPX")
-			invertCarry()
 		case CPY:
 			immediate("cpi", REGY, "CPY")
-			invertCarry()
 		case BIT:
 			// BIT sets the Z flag as though the value in the address tested were ANDed with the accumulator.
 			// The N and V flags are set to match bits 7 and 6 respectively in the value stored at the tested address.
@@ -279,9 +283,9 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("          sbrc %s, 6\n", REGT)       // M bit 6 -> V
 			fmt.Printf("          sev\n")
 		case BCS:
-			branch("brcs", "BCS")
+			branch("brcc", "BCS") // clear/set swapped as AVR's carry flags state is inverse
 		case BCC:
-			branch("brcc", "BCC")
+			branch("brcs", "BCC") // clear/set swapped as AVR's carry flags state is inverse
 		case BVS:
 			branch("brvs", "BVS")
 		case BVC:
@@ -340,11 +344,11 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("lds r26,zero+0x%02x             ; LDA ($%02x),Y\n", addr, addr)
 			fmt.Printf("          lds r27,zero+0x%02x+1\n", addr)
 			fmt.Printf("          in %s, 0x3f\n", REGS)
-			fmt.Printf("          subi r26,lo8(0x%04x)\n", ramStart)   // subtract data start
+			fmt.Printf("          subi r26,lo8(0x%04x)\n", ramStart)	// subtract data start
 			fmt.Printf("          sbci r27,hi8(0x%04x)\n", ramStart)
 			fmt.Printf("          subi r26,lo8(-(ram))\n")           // add ram offset
 			fmt.Printf("          sbci r27,hi8(-(ram))\n")
-			fmt.Printf("          add r26,%s\n", REGY)
+			fmt.Printf("          add r26,%s\n", REGY)				// add Y index
 			fmt.Printf("          adc r27,%s\n", REGZ)
 			fmt.Printf("          out 0x3f, %s\n", REGS)
 			fmt.Printf("          ld %s, X\n", REGA)
@@ -448,6 +452,7 @@ func transcode(address uint16, stop uint16) {
 		    // 6502 NOPs were either for padding or timing, neither of which apply here
 			fmt.Printf("                              ; NOP\n")
 		case BRK:
+			// ¯\_(ツ)_/¯
 			fmt.Printf("                              ; BRK\n")
 		case CLC:
 			fmt.Printf("clc                           ; CLC\n")
@@ -493,7 +498,7 @@ func checkTest(reg string) {
 }
 
 func branch(branchIns string, ins string) {
-	addr := flattenJumpAddress(relative8())
+	addr := flattenJumpAddress(nextByteRelativeAddress())
 	// this isn't very scientific as our instructions are variable length, but branching too far may require rjmp
 	if addr > pc+16 || addr < pc-16 {
 		fmt.Printf("%s 1f                       ; %s $%04x\n", branchIns, ins, addr)
@@ -537,12 +542,6 @@ func storeIndexed(reg string, indexReg string, ins string, insIndex string) {
 	storeMap[addr] = true
 }
 
-func invertCarry() {
-	fmt.Printf("          in %s, 0x3f\n", REGS)
-	fmt.Printf("          eor %s, %s\n", REGS, REGW)
-	fmt.Printf("          out 0x3f, %s\n", REGS)
-}
-
 func immediate(immediateIns string, reg string, ins string) {
 	value := nextByte()
 	fmt.Printf("%-4s %s, 0x%02x                ; %s #$%02x\n", immediateIns, reg, value, ins, value)
@@ -562,6 +561,7 @@ func checkSelfMod(addr uint16) {
 
 // follows the code path, taking branches and jumps, marking memory which contains code and their jump points
 func searchCodeBlocks(start uint16) {
+	start = flattenJumpAddress(start)
 	jumpPoints[start] = true // may have been visited but may not have been a jump point
 	if codeMap[start] { // already been down this road
 		return
@@ -572,13 +572,13 @@ func searchCodeBlocks(start uint16) {
 		ins := nextByte()
 		switch ins {
 		case JMP:
-			searchCodeBlocks(flattenJumpAddress(nextWord()))
+			searchCodeBlocks(nextWord())
 			pc = savePc
 			return
 		case JSR:
-			searchCodeBlocks(flattenJumpAddress(nextWord()))
+			searchCodeBlocks(nextWord())
 		case BCS, BCC, BVS, BVC, BPL, BMI, BNE, BEQ:
-			searchCodeBlocks(flattenJumpAddress(relative8()))
+			searchCodeBlocks(nextByteRelativeAddress())
 		case RTS:
 			pc = savePc
 			return
@@ -595,10 +595,9 @@ func searchCodeBlocks(start uint16) {
 	}
 }
 
-func scanCodeBlocks() {
+func printCodeBlocks() {
 	change := codeMap[0]
-	var index int32
-	for index = 0; index < 0x10000; index++ {
+	for index := 0; index < 0x10000; index++ {
 		code := codeMap[index]
 		if code != change {
 			if code {
@@ -614,14 +613,14 @@ func scanCodeBlocks() {
 func transcodeBlocks() {
 	change := codeMap[0]
 	var start uint16
-	for c := 0; c < 0x10000; c++ {
-		code := codeMap[c]
+	for index := 0; index < 0x10000; index++ {
+		code := codeMap[index]
 		if code != change {
 			if code {
-				start = uint16(c)
+				start = uint16(index)
 			} else {
-				codeBlocks[start] = uint16(c-1)
-				transcode(start, uint16(c-1))
+				codeBlocks[start] = uint16(index -1)
+				transcode(start, uint16(index-1))
 			}
 			change = code
 		}
@@ -632,15 +631,20 @@ func saveMemoryMap(path string) {
 	rgba := image.NewRGBA(image.Rect(0, 0, 256, 256))
 	for c := 0; c < 0x10000; c++ {
 		i := c*4
-		rgba.Pix[i+3] = 0xff // alpha
+		rgba.Pix[i+3] = 0xff // alpha channel
 
 		if c & 0x0f == 0 || c & 0xf00 == 0 {
-			rgba.Pix[i+2] = 0x60
+			rgba.Pix[i+2] = 0x60	// draw grid
 		}
-		if codeMap[c] {
+		if codeMap[c] {				// confirmed code path
 			rgba.Pix[i+0] = 0xa0
-		} else if c >= int(sidHeader.LoadAddress) && c <= int(sidHeader.LoadAddress) + len(data) {
-			rgba.Pix[i+1] = 0x60
+			rgba.Pix[i+2] = 0
+		} else if voidMap[c] {		// eliminated code
+			rgba.Pix[i+0] = 0x20
+			rgba.Pix[i+1] = 0x20
+			rgba.Pix[i+2] = 0
+		} else if c >= int(loadAddress) && c <= int(loadAddress) + len(data) {
+			rgba.Pix[i+1] = 0x60	// assume data
 		}
 		if loadMap[c] || storeMap[c] {
 			rgba.Pix[i+1] = 0xd0
