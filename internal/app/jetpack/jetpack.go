@@ -49,8 +49,8 @@ func BlastOff(path string) {
 	writeSidInfo(path)
 	writeMontyFunctions()
 
-	searchCodeBlocks(sidHeader.InitAddress)
-	searchCodeBlocks(sidHeader.PlayAddress)
+	searchCodeBlocks(flattenJumpAddress(sidHeader.InitAddress))
+	searchCodeBlocks(flattenJumpAddress(sidHeader.PlayAddress))
 	scanCodeBlocks()
 	transcodeBlocks()
 
@@ -157,6 +157,10 @@ func nextByte() uint8 {
 	return v
 }
 
+func byteAt(addr uint16) uint8 {
+	return data[addr-sidHeader.LoadAddress]
+}
+
 // get the next word and increment the program counter and marking the code map
 func nextWord() uint16 {
 	v := (uint16)(data[pc-sidHeader.LoadAddress + 1]) << 8 | (uint16)(data[pc-sidHeader.LoadAddress])
@@ -164,6 +168,17 @@ func nextWord() uint16 {
 	codeMap[pc+1] = true
 	pc+=2
 	return v
+}
+
+func wordAt(addr uint16) uint16 {
+	return (uint16)(data[addr-sidHeader.LoadAddress + 1]) << 8 | (uint16)(data[addr-sidHeader.LoadAddress])
+}
+
+func flattenJumpAddress(addr uint16) uint16 {
+	for byteAt(addr) == JMP {
+		addr = wordAt(addr+1)
+	}
+	return addr
 }
 
 func transcode(address uint16, stop uint16) {
@@ -182,10 +197,10 @@ func transcode(address uint16, stop uint16) {
 		totalOpcodes[ins] = ins
 		switch ins {
 		case JMP:
-			addr := nextWord()
+			addr := flattenJumpAddress(nextWord())
 			fmt.Printf("rjmp L%04x                    ; JMP $%04x\n", addr, addr)
 		case JSR:
-			addr := nextWord()
+			addr := flattenJumpAddress(nextWord())
 			fmt.Printf("rcall L%04x                   ; JSR $%04x\n", addr, addr)
 		case STA:
 			addr := nextWord()
@@ -478,7 +493,7 @@ func checkTest(reg string) {
 }
 
 func branch(branchIns string, ins string) {
-	addr := relative8()
+	addr := flattenJumpAddress(relative8())
 	// this isn't very scientific as our instructions are variable length, but branching too far may require rjmp
 	if addr > pc+16 || addr < pc-16 {
 		fmt.Printf("%s 1f                       ; %s $%04x\n", branchIns, ins, addr)
@@ -557,13 +572,13 @@ func searchCodeBlocks(start uint16) {
 		ins := nextByte()
 		switch ins {
 		case JMP:
-			searchCodeBlocks(nextWord())
+			searchCodeBlocks(flattenJumpAddress(nextWord()))
 			pc = savePc
 			return
 		case JSR:
-			searchCodeBlocks(nextWord())
+			searchCodeBlocks(flattenJumpAddress(nextWord()))
 		case BCS, BCC, BVS, BVC, BPL, BMI, BNE, BEQ:
-			searchCodeBlocks(relative8())
+			searchCodeBlocks(flattenJumpAddress(relative8()))
 		case RTS:
 			pc = savePc
 			return

@@ -10,11 +10,11 @@ While many 6502 instructions are implemented, there are more to be mapped.
 Special cases are also implemented to deal with self-modifying code. 
 
 The current implemention was written (at least initially) to cross-compile the
-Monty On The Run SID tune, to the AVR to run on the Monty Stereo SID Synth.
+`Monty On The Run` SID tune, to the AVR to run on the Monty Stereo SID Synth.
 
 https://github.com/slipperyseal/monty
 
-Monty playing the Monty On The Run chip tune by Rob Hubbard...
+Monty playing the `Monty On The Run` chip tune by Rob Hubbard...
 
 [![Monty](https://img.youtube.com/vi/i0d1r9NZg9I/0.jpg)](https://www.youtube.com/watch?v=i0d1r9NZg9I)
 
@@ -173,9 +173,13 @@ Reads and write addresses to zero page are tracked to narrow its memory requirem
 There are indirect pointer instructions that allow placing pointers in zero page addresses.
 Often code will only use a small section of zero page for storing these indirect pointers.
 
+Another optimisation is to flatten indirect jumps. If a branch or jump simply points to another jump, the jump path is searched
+for its destination, and that location is substituted in the first jump.  This technique already eliminates a small code block
+from the start of `Monty On The Run` and optimises several branch instructions.
+
 As another dimension to this challenge, 6502 code would often be self-modifying.
 Code would swap out instructions or modify immediate instruction parameters which will be statically compiled for the AVR.
-Monty On The Run has one piece of self-modifying code and currently it’s dealt with as a special case with custom AVR code.
+`Monty On The Run` has one piece of self-modifying code and currently it’s dealt with as a special case with custom AVR code.
 
 Other cases where translation may not function correctly is where the 6502 code relies on specific behaviour of the processor.
 For example, saving the status register and testing bits within it. While Jetpack can `push` and `pop` the status register to the stack,
