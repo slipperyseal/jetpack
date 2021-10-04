@@ -9,7 +9,7 @@ It searches execution paths to determine code block boundaries.
 While many 6502 instructions are implemented, there are more to be mapped.
 Special cases are also implemented to deal with self-modifying code. 
 
-The current implemention was written (at least initially) to cross-compile the
+The current implementation was written (at least initially) to cross-compile the
 `Monty On The Run` SID tune, to the AVR to run on the Monty Stereo SID Synth.
 
 https://github.com/slipperyseal/monty
@@ -30,7 +30,7 @@ Jetpack loads SID files and writes the AVR assembler to standard out. This assem
 
     go run jetpack.go Monty_on_the_Run.sid >mort.avr.s
 
-Jetpack was originally written to convert `Monty_on_the_Run.sid` and has support for its self-modifying code.
+Jetpack was originally written to convert `Monty_on_the_Run.sid`.
 Other SIDs have been successfully converted, but success depends on how that code works,
 self-modifying code being the main issue. 6502 code might replace its own instructions in memory or
 immediate values loaded by instructions. AVR code exists in flash memory, not SRAM, plus the replacement of
@@ -46,10 +46,12 @@ This is handy when developing Jetpack and when comparing the cross-assembled out
 
 Jetpack also generates a memory map. 256 x 256 pixels represent 64K of memory. 
 
-- Red: code
-- Dark Green: data (or blank space or unrecognized code within the binary)
+- Red: Translated code.
 - White: Jump points within code. Target locations of JMP, JSRs and branch instructions.
+- Dark Green: Data, blank space, or unreached code within the binary.
 - Bright Green: Absolute data read and write points (which may have indexes applied).
+- Dark grey: Eliminated code. Flattened jumps etc.
+- Blue: 16x16 byte grid for your convenience.
 
 <img src="https://github.com/slipperyseal/jetpack/blob/main/Monty_on_the_Run.sid.memory.png?raw=true" width="512">
 
