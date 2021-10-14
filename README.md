@@ -141,10 +141,16 @@ The 6502 can perform algorithmic operations direct to memory and have indexed mo
 Where the translation becomes more nuanced is the interaction of status flags.
 Code functions by the way status flags, such as `zero`, `carry`, `minus` and `overflow`, bringing state to subsequent instructions.
 6502 instructions test some of these flags on load instructions, while the AVR instructions do not.
-Also, the `carry` flag represents a fundamentally different thing on the AVR.
-It’s essentially inverted. We need special handling for some status flags.
-This includes protecting the `carry` flag while we use it to perform supportive operations which would modify its state.
+We also need to protect the `carry` flag while we use it to perform supportive operations which modify its state.
 Static analysis can detect where status flags need to be tested or preserved, allowing those extra AVR instructions to be omitted.
+
+_"For subtractive operations, two (opposite) conventions are employed as most machines set the carry flag on borrow while
+some machines (such as the 6502 and the PIC) instead reset the carry flag on borrow (and vice versa)."_
+https://en.wikipedia.org/wiki/Carry_flag
+
+So yeah, AVR and 6502 use opposite conventions.
+Inverting the relevant branch instructions after a subtractive operation seems to work.
+More subtle cases across branches with different root instructions may be problematic.
 
 Code and data are often found in the same binary.
 It’s not necessarily easy to know what is code and what is data.

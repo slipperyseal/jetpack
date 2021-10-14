@@ -193,6 +193,9 @@ func transcode(address uint16, stop uint16) {
 	pc = address
 
 	fmt.Printf("\n          ; transcode $%04x - $%04x\n", address, stop)
+
+	// 6502 carry is inverted for subtractive instructions
+	carryInverted := false
 	for pc <= stop {
 		if printAllLabels || jumpPoints[pc] {
 			fmt.Printf("L%04x:    ", pc)
@@ -257,18 +260,23 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("          eor %s, %s\n", REGA, REGT)
 		case CMP:
 			immediate("cpi", REGA, "CMP")
+			carryInverted = true
 		case CMP_A:
 			addr := nextWord()
 			fmt.Printf("lds %s, ram+0x%04x           ; CMP $%04x\n", REGT, addr-ramStart, addr)
 			fmt.Printf("          cp %s, %s\n", REGA, REGT)
 			loadMap[addr] = true
+			carryInverted = true
 		case CMP_X:
 			loadIndexed(REGT, REGX, "CMP", "X")
 			fmt.Printf("          cp %s, %s\n", REGA, REGT)
+			carryInverted = true
 		case CPX:
 			immediate("cpi", REGX, "CPX")
+			carryInverted = true
 		case CPY:
 			immediate("cpi", REGY, "CPY")
+			carryInverted = true
 		case BIT:
 			// BIT sets the Z flag as though the value in the address tested were ANDed with the accumulator.
 			// The N and V flags are set to match bits 7 and 6 respectively in the value stored at the tested address.
@@ -283,9 +291,17 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("          sbrc %s, 6\n", REGT)       // M bit 6 -> V
 			fmt.Printf("          sev\n")
 		case BCS:
-			branch("brcc", "BCS") // clear/set swapped as AVR's carry flags state is inverse
+			if carryInverted {
+				branch("brcc", "BCS")
+			} else {
+				branch("brcs", "BCS")
+			}
 		case BCC:
-			branch("brcs", "BCC") // clear/set swapped as AVR's carry flags state is inverse
+			if carryInverted {
+				branch("brcs", "BCC")
+			} else {
+				branch("brcc", "BCC")
+			}
 		case BVS:
 			branch("brvs", "BVS")
 		case BVC:
@@ -364,17 +380,21 @@ func transcode(address uint16, stop uint16) {
 			value := nextByte()
 			fmt.Printf("ldi %s, 0x%02x                 ; ADC #$%02x\n", REGT, value, value)
 			fmt.Printf("          adc %s, %s\n", REGA, REGT)
+			carryInverted = false
 		case ADC_A:
 			addr := nextWord()
 			fmt.Printf("lds %s, ram+0x%04x           ; ADC $%04x\n", REGT, addr-ramStart, addr)
 			fmt.Printf("          adc %s, %s\n", REGA, REGT)
 			loadMap[addr] = true
+			carryInverted = false
 		case ADC_X:
 			loadIndexed(REGT, REGX, "ADC", "X")
 			fmt.Printf("          adc %s, %s\n", REGA, REGT)
+			carryInverted = false
 		case ADC_Y:
 			loadIndexed(REGT, REGY, "ADC", "Y")
 			fmt.Printf("          adc %s, %s\n", REGA, REGT)
+			carryInverted = false
 		case AND_A:
 			addr := nextWord()
 			fmt.Printf("lds %s, ram+0x%04x           ; AND $%04x\n", REGT, addr-ramStart, addr)
@@ -383,17 +403,21 @@ func transcode(address uint16, stop uint16) {
 		case SBC:
 			value := nextByte()
 			fmt.Printf("sbci %s, 0x%02x                ; SBC #$%02x\n", REGA, value, value)
+			carryInverted = true
 		case SBC_A:
 			addr := nextWord()
 			fmt.Printf("lds %s, ram+0x%04x           ; SBC $%04x\n", REGT, addr-ramStart, addr)
 			fmt.Printf("          sbc %s, %s\n", REGA, REGT)
 			loadMap[addr] = true
+			carryInverted = true
 		case SBC_X:
 			loadIndexed(REGT, REGX, "SBC", "X")
 			fmt.Printf("          sbc %s, %s\n", REGA, REGT)
+			carryInverted = true
 		case SBC_Y:
 			loadIndexed(REGT, REGY, "SBC", "Y")
 			fmt.Printf("          sbc %s, %s\n", REGA, REGT)
+			carryInverted = true
 		case ROR_A:
 			addr := nextWord()
 			fmt.Printf("lds %s, ram+0x%04x           ; ROR $%04x\n", REGT, addr-ramStart, addr)
