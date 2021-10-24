@@ -28,7 +28,7 @@ https://golang.org/doc/install
 
 Jetpack loads SID files and writes the AVR assembler to standard out. This assembler is compatible with `AVR-GCC`.
 
-    go run jetpack.go Monty_on_the_Run.sid >mort.avr.s
+    go run jetpack.go Monty_on_the_Run.sid >motr.avr.s
 
 Jetpack was originally written to convert `Monty_on_the_Run.sid`.
 Other SIDs have been successfully converted, but success depends on how that code works,
@@ -39,7 +39,7 @@ AVR code or data might not be practical solution anyway. These cases need to be 
 Jetpack currently detects the filename of `Monty_on_the_Run.sid` and
 enables the special cases to convert this file.
 
-The latest version of the output is included in the repo as `mort.avr.s`
+The latest version of the output is included in the repo as `motr.avr.s`
 
 The repo also contains the disassembled 6502 binary as `motr.6502.asm`.
 This is handy when developing Jetpack and when comparing the cross-assembled output.

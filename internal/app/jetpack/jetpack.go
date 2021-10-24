@@ -480,8 +480,10 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("                              ; BRK\n")
 		case CLC:
 			fmt.Printf("clc                           ; CLC\n")
+			carryInverted = false
 		case SEC:
 			fmt.Printf("sec                           ; SEC\n")
+			carryInverted = false
 		case CLV:
 			fmt.Printf("clv                           ; CLV\n")
 		case INX:
