@@ -1,5 +1,13 @@
 package jetpack
 
+const REGA = "r16" // 6502 Accumulator
+const REGX = "r17" // 6502 X
+const REGY = "r18" // 6502 Y
+const REGZ = "r19" // Zero
+const REGT = "r20" // Temp
+const REGU = "r21" // Another Temp
+const REGS = "r22" // AVR status register storage. for protecting the carry bit while we use it for pointer calculations.
+
 const ADC_A = 0x6D
 const ADC_X = 0x7D
 const ADC_Y = 0x79
@@ -72,7 +80,7 @@ const TAY = 0xA8
 const TYA = 0x98
 const TXA = 0x8a
 
-// map on op code to the number of the total number of bytes used by this instruction and any of its immediate data
+// map of op code to the number bytes used by this instruction (op code + address or immediate data)
 var InstructionBytes = map[uint8]int{
 	0x00: 1,0x01: 2,0x05: 2,0x06: 2,0x08: 1,0x09: 2,0x0A: 1,0x0D: 3,0x0E: 3,
 	0x10: 2,0x11: 2,0x15: 2,0x16: 2,0x18: 1,0x19: 3,0x1D: 3,0x1E: 3,0x20: 3,

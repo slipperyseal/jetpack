@@ -7,5 +7,5 @@ import (
 )
 
 func main() {
-	jetpack.BlastOff(os.Args[1])
+	jetpack.BlastOff(os.Args[1], true, false)
 }

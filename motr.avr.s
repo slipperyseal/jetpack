@@ -14,6 +14,7 @@
 ;   LoadAddress: $8000
 ;   InitAddress: $8000
 ;   PlayAddress: $8012
+;     RAM Start: $8400
 ;  Total Binary: 5568 bytes
 ;           RAM: 4544 bytes
 

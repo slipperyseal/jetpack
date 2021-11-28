@@ -32,7 +32,7 @@ Jetpack loads SID files and writes the AVR assembler to standard out. This assem
 
 Jetpack was originally written to convert `Monty_on_the_Run.sid`.
 Other SIDs have been successfully converted, but success depends on how that code works,
-self-modifying code being the main issue. 6502 code might replace its own instructions in memory or
+Self-modifying code being the main issue. 6502 code might replace its own instructions in memory or
 immediate values loaded by instructions. AVR code exists in flash memory, not SRAM, plus the replacement of
 AVR code or data might not be practical solution anyway. These cases need to be identified and dealt with independently. 
 
@@ -44,12 +44,12 @@ The latest version of the output is included in the repo as `motr.avr.s`
 The repo also contains the disassembled 6502 binary as `motr.6502.asm`.
 This is handy when developing Jetpack and when comparing the cross-assembled output.
 
-Jetpack also generates a memory map. 256 x 256 pixels represent 64K of memory. 
+Jetpack also generates a memory map, a 256 x 256 pixels represent 64K of memory. 
 
 - Red: Translated code.
 - White: Jump points within code. Target locations of JMP, JSRs and branch instructions.
-- Dark Green: Data, blank space, or unreached code within the binary.
-- Bright Green: Absolute data read and write points (which may have indexes applied).
+- Dark Green: Data, padding, or unreachable code within the binary.
+- Bright Green: Known data read and write points (which may have indexes applied).
 - Dark grey: Eliminated code. Flattened jumps etc.
 - Blue: 16x16 byte grid for your convenience.
 
@@ -177,13 +177,14 @@ Using the code bitset could further help narrow the size of the binary block, ex
 Or in the case of `Monty On The Run` we know that data starts at `$8400`, so we override that manually.
 
 Writes to “zero page” (the first 256 bytes of RAM) are handled as a special case.
-Reads and write addresses to zero page are tracked to narrow its memory requirements.
+Reads and write addresses to zero page are tracked to narrow memory requirements.
 There are indirect pointer instructions that allow placing pointers in zero page addresses.
 Often code will only use a small section of zero page for storing these indirect pointers.
 
 Another optimisation is to flatten indirect jumps. If a branch or jump simply points to another jump, the jump path is searched
-for its destination, and that location is substituted in the first jump.  This technique already eliminates a small code block
-from the start of `Monty On The Run` and optimises several branch instructions.
+for its final destination, and that location is substituted in the first branch or jump.
+Its more common than you think. Jump tables and where short range branches need to travel further, a branch to a long range jump is often used. 
+This flattening technique already eliminates a small code block  from the start of `Monty On The Run` and optimises several branch instructions.
 
 As another dimension to this challenge, 6502 code would often be self-modifying.
 Code would swap out instructions or modify immediate instruction parameters which will be statically compiled for the AVR.

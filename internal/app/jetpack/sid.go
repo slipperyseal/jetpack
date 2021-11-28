@@ -64,6 +64,7 @@ func writeSidInfo(path string) {
 	fmt.Printf(";   LoadAddress: $%04x\n", sidHeader.LoadAddress)
 	fmt.Printf(";   InitAddress: $%04x\n", sidHeader.InitAddress)
 	fmt.Printf(";   PlayAddress: $%04x\n", sidHeader.PlayAddress)
+	fmt.Printf(";     RAM Start: $%04x\n", ramStart)
 	fmt.Printf(";  Total Binary: %d bytes\n", len(data))
 	fmt.Printf(";           RAM: %d bytes\n\n", ramLen)
 }

@@ -17,18 +17,21 @@ var pc uint16			// 6502 program counter
 var ramStart uint16		// offset at which ram block starts
 var ramLen uint16		// length of ram block
 var maxZero uint8 = 0   // often only the lower bit of zero page are used, so we track the highest read or write
-var totalInstructions = 0
-var totalOpcodes = make(map[byte]byte)
+var totalInstructions = 0	// count total instructions translated
+var totalOpcodes = make(map[byte]byte) // track op codes we've translated
 var codeMap [0x10000]bool	// code at this address
 var storeMap [0x10000]bool  // absolute or indexed store to this address
 var loadMap [0x10000]bool	// absolute or indexed load from this address
 var voidMap [0x10000]bool	// potentially eliminated code (if not in codeMap) but could have been kept on an alternate search.
-var codeBlocks = make(map[uint16]uint16)
+var codeBlocks = make(map[uint16]uint16) // blocks of contiguous instructions
 var jumpPoints = make(map[uint16]bool)
-var printAllLabels = false
+var failOnSelfModifying bool // set to false to ignore self modifying code
+var printAllLabels bool  // print a label for each instruction, not just those needed for jumps and branches
 var motr bool          // handle special cases for Monty_on_the_Run.sid
 
-func BlastOff(path string) {
+func BlastOff(path string, failOnSelfMod bool, printAllLab bool) {
+	failOnSelfModifying = failOnSelfMod
+	printAllLabels = printAllLab
 	// special handing for Monty yaa!
 	motr = path == "Monty_on_the_Run.sid"
 
@@ -36,9 +39,7 @@ func BlastOff(path string) {
 	defer file.Close()
 
 	readSidHeader(file)
-
 	data = loadData(file)
-
 	saveBinary(path + ".bin")
 
 	loadAddress = sidHeader.LoadAddress
@@ -127,6 +128,7 @@ func writeBinary() {
 	}
 }
 
+// save the binary of the tune without the header, so it can be loaded into a disassembler or whatevs
 func saveBinary(filename string) {
 	outFile, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0666)
 	if err != nil {
@@ -146,7 +148,7 @@ func nextSetsNZ() bool {
 	return InstructionsSetNV[data[pc-loadAddress]]
 }
 
-// fetches the the next byte and returns the calculated PC relative address. for branch instructions.
+// fetches the next byte and returns the calculated PC relative address. for branch instructions.
 // increment the program counter and mark the code map
 func nextByteRelativeAddress() uint16 {
 	return uint16( int32(pc & 0xffff) + int32(int8(nextByte())) )
@@ -525,10 +527,11 @@ func checkTest(reg string) {
 
 func branch(branchIns string, ins string) {
 	addr := flattenJumpAddress(nextByteRelativeAddress())
-	// this isn't very scientific as our instructions are variable length, but branching too far may require rjmp
+	// branching too far may require a longer range rjmp.
+	// the range of 16 isn't very scientific as our instructions are variable length.
 	if addr > pc+16 || addr < pc-16 {
 		fmt.Printf("%s 1f                       ; %s $%04x\n", branchIns, ins, addr)
-		fmt.Printf("          sbrc %s, 0\n", REGZ) // always skip next instruction. bit 0 in REGZ is clear
+		fmt.Printf("          sbrc %s, 0\n", REGZ) // branch not taken so always skip next instruction (bit 0 in REGZ is clear)
 		fmt.Printf("1:        rjmp L%04x\n", addr)
 	} else {
 		fmt.Printf("%s L%04x                    ; %s $%04x\n", branchIns, addr, ins, addr)
@@ -580,7 +583,7 @@ func pushMaxZero(val uint8) {
 }
 
 func checkSelfMod(addr uint16) {
-	if codeMap[addr] {
+	if failOnSelfModifying && codeMap[addr] {
 		log.Fatal(fmt.Sprintf("SELF-MODIFYING CODE TO $%04x - PC $%04x\n", addr, pc))
 	}
 }
