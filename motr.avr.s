@@ -1656,6 +1656,13 @@ L95aa:    sec                           ; SEC
 zero:
     .zero 6
 
+.global	songcount
+    .data
+    .type songcount, @object
+    .size songcount, 2
+songcount:
+    .word 19
+
 .global	ram
     .data
     .type ram, @object

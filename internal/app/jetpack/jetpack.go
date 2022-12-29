@@ -76,6 +76,7 @@ func writePrefix() {
 
 func writeRamSpaces() {
 	fmt.Printf("\n")
+
 	fmt.Printf(".global	zero\n")
 	fmt.Printf("    .section .bss\n")
 	fmt.Printf("    .type zero, @object\n")
@@ -83,12 +84,18 @@ func writeRamSpaces() {
 	fmt.Printf("zero:\n")
 	fmt.Printf("    .zero %d\n\n", maxZero+1)
 
+	fmt.Printf(".global	songcount\n")
+	fmt.Printf("    .data\n")
+	fmt.Printf("    .type songcount, @object\n")
+	fmt.Printf("    .size songcount, 2\n")
+	fmt.Printf("songcount:\n")
+	fmt.Printf("    .word %d\n\n", sidHeader.Songs)
+
 	fmt.Printf(".global	ram\n")
 	fmt.Printf("    .data\n")
 	fmt.Printf("    .type ram, @object\n")
 	fmt.Printf("    .size ram, %d\n", ramLen)
 	fmt.Printf("ram:\n")
-
 	writeBinary()
 }
 
