@@ -55,7 +55,7 @@ Jetpack also generates a memory map, a 256 x 256 pixels represent 64K of memory.
 - Dark grey: Eliminated code. Flattened jumps etc.
 - Blue: 16x16 byte grid for your convenience.
 
-<img src="https://github.com/slipperyseal/jetpack/blob/main/Monty_on_the_Run.sid.memory.png?raw=true" width="512">
+<img src="https://github.com/slipperyseal/jetpack/blob/main/Monty_on_the_Run.png?raw=true" width="512">
 
 #### Pros and cons of cross-assembly vs emulation
 
@@ -102,33 +102,33 @@ This was the main driver for the project. Emulation might be more accurate, but 
 
 ##### AVR output
 
-    L8367:    ldi  r18, 0xff                ; LDY #$ff
-              lds r16, ram+0x00fb           ; LDA $84fb
-              tst r16
-              brne L8374                    ; BNE $8374
-              lds r16, ram+0x00fc           ; LDA $84fc
-              tst r16
-              brmi L8374                    ; BMI $8374
-              inc r18                       ; INY
-    L8374:    sts ram+0x00fd, r18           ; STY $84fd
-              dec r17                       ; DEX
-              brmi L837d                    ; BMI $837d
-              rjmp L805f                    ; JMP $805f
-    L837d:    ldi  r16, 0xff                ; LDA #$ff
-              tst r16
-              sts ram+0x00fd, r16           ; STA $84fd
-              lds r16, ram+0x00fb           ; LDA $84fb
-              tst r16
-              brne L838c                    ; BNE $838c
-              lds r20, ram+0x00fc           ; BIT $84fc
-              mov r21, r20
-              and r21, r16
-              cln
-              clv
-              sbrc r20, 7
-              sen
-              sbrc r20, 6
-              sev
+    L8367:  ldi  r18, 0xff                ; LDY #$ff
+            lds r16, ram+0x00fb           ; LDA $84fb
+            tst r16
+            brne L8374                    ; BNE $8374
+            lds r16, ram+0x00fc           ; LDA $84fc
+            tst r16
+            brmi L8374                    ; BMI $8374
+            inc r18                       ; INY
+    L8374:  sts ram+0x00fd, r18           ; STY $84fd
+            dec r17                       ; DEX
+            brmi L837d                    ; BMI $837d
+            rjmp L805f                    ; JMP $805f
+    L837d:  ldi  r16, 0xff                ; LDA #$ff
+            tst r16
+            sts ram+0x00fd, r16           ; STA $84fd
+            lds r16, ram+0x00fb           ; LDA $84fb
+            tst r16
+            brne L838c                    ; BNE $838c
+            lds r20, ram+0x00fc           ; BIT $84fc
+            mov r21, r20
+            and r21, r16
+            cln
+            clv
+            sbrc r20, 7
+            sen
+            sbrc r20, 6
+            sev
 
 ## How it works
 
