@@ -1857,6 +1857,8 @@ ram:
 
 ;        6502 opcodes translated: 62 of 151
 ;        instructions translated: 483
+;        zero page length: 6
+;        RAM block length: 4544
 ;        Thank you for your cooperation.
 
     .end

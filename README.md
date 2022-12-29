@@ -30,6 +30,8 @@ Jetpack loads SID files and writes the AVR assembler to standard out. This assem
 
     go run jetpack.go Monty_on_the_Run.sid >motr.avr.s
 
+See `jetpack.go` for command line options and their defaults.
+
 Jetpack was originally written to convert `Monty_on_the_Run.sid`.
 Other SIDs have been successfully converted, but success depends on how that code works,
 Self-modifying code being the main issue. 6502 code might replace its own instructions in memory or
@@ -100,25 +102,25 @@ This was the main driver for the project. Emulation might be more accurate, but 
 
 ##### AVR output
 
-    L8367:    ldi r18, 0xff                 ; LDY #$ff
-    L8369:    lds r16, ram+0x00fb           ; LDA $84fb
+    L8367:    ldi  r18, 0xff                ; LDY #$ff
+              lds r16, ram+0x00fb           ; LDA $84fb
               tst r16
-    L836c:    brne L8374                    ; BNE $8374
-    L836e:    lds r16, ram+0x00fc           ; LDA $84fc
+              brne L8374                    ; BNE $8374
+              lds r16, ram+0x00fc           ; LDA $84fc
               tst r16
-    L8371:    brmi L8374                    ; BMI $8374
-    L8373:    inc r18                       ; INY
+              brmi L8374                    ; BMI $8374
+              inc r18                       ; INY
     L8374:    sts ram+0x00fd, r18           ; STY $84fd
-    L8377:    dec r17                       ; DEX
-    L8378:    brmi L837d                    ; BMI $837d
-    L837a:    rjmp L805f                    ; JMP $805f
-    L837d:    ldi r16, 0xff                 ; LDA #$ff
+              dec r17                       ; DEX
+              brmi L837d                    ; BMI $837d
+              rjmp L805f                    ; JMP $805f
+    L837d:    ldi  r16, 0xff                ; LDA #$ff
               tst r16
-    L837f:    sts ram+0x00fd, r16           ; STA $84fd
-    L8382:    lds r16, ram+0x00fb           ; LDA $84fb
+              sts ram+0x00fd, r16           ; STA $84fd
+              lds r16, ram+0x00fb           ; LDA $84fb
               tst r16
-    L8385:    brne L838c                    ; BNE $838c
-    L8387:    lds r20, ram+0x00fc           ; BIT $84fc
+              brne L838c                    ; BNE $838c
+              lds r20, ram+0x00fc           ; BIT $84fc
               mov r21, r20
               and r21, r16
               cln

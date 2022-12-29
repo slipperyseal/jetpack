@@ -28,7 +28,7 @@ var failOnSelfModifying bool // set to false to ignore self modifying code
 var printAllLabels bool      // print a label for each instruction, not just those needed for jumps and branches
 var motr bool                // handle special cases for Monty_on_the_Run.sid
 
-func BlastOff(path string, failOnSelfMod bool, printAllLab bool) {
+func BlastOff(path string, failOnSelfMod bool, printAllLab bool, writeBin bool, writeMemoryMap bool) {
 	failOnSelfModifying = failOnSelfMod
 	printAllLabels = printAllLab
 	// special handing for Monty yaa!
@@ -39,12 +39,14 @@ func BlastOff(path string, failOnSelfMod bool, printAllLab bool) {
 
 	readSidHeader(file)
 	data = loadData(file)
-	saveBinary(path + ".bin")
+	if writeBin {
+		saveBinary(path + ".bin")
+	}
 
 	loadAddress = sidHeader.LoadAddress
 	ramStart = loadAddress
 	if motr {
-		ramStart = 0x8400
+		ramStart = 0x8400 // for Monty On The Run we know we can load ram from 8400
 	}
 	ramLen = uint16(len(data)) - (ramStart - loadAddress)
 
@@ -60,7 +62,9 @@ func BlastOff(path string, failOnSelfMod bool, printAllLab bool) {
 	writeRamSpaces()
 	writeSuffix()
 
-	saveMemoryMap(path + ".memory.png")
+	if writeMemoryMap {
+		saveMemoryMap(path + ".memory.png")
+	}
 }
 
 func writePrefix() {
@@ -102,6 +106,8 @@ func writeSuffix() {
 
 	fmt.Printf(";        6502 opcodes translated: %d of 151\n", len(totalOpcodes))
 	fmt.Printf(";        instructions translated: %d\n", totalInstructions)
+	fmt.Printf(";        zero page length: %d\n", maxZero+1)
+	fmt.Printf(";        RAM block length: %d\n", ramLen)
 	fmt.Printf(";        Thank you for your cooperation.\n\n")
 
 	fmt.Printf("    .end\n\n")
@@ -454,9 +460,9 @@ func transcode(address uint16, stop uint16) {
 				fmt.Printf("lds %s, ram+0x%04x           ; DEC $%04x\n", REGT, addr-ramStart, addr)
 				fmt.Printf("          dec %s\n", REGT)
 				fmt.Printf("          sts ram+0x%04x, %s\n", addr-ramStart, REGT)
-				loadMap[addr] = true
-				storeMap[addr] = true
 			}
+			loadMap[addr] = true
+			storeMap[addr] = true
 		case ASL:
 			fmt.Printf("lsl %s                       ; ASL\n", REGA)
 		case LSR:
