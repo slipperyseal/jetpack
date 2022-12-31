@@ -28,6 +28,7 @@ var jumpPoints = make(map[uint16]bool)
 var failOnSelfModifying bool // set to false to ignore self modifying code
 var printAllLabels bool      // print a label for each instruction, not just those needed for jumps and branches
 var motr bool                // handle special cases for Monty_on_the_Run.sid
+var opCodeMap = buildOpCodeMap()
 
 func BlastOff(path string, failOnSelfMod bool, printAllLab bool, writeBin bool, writeMemoryMap bool, ramBase uint16) {
 	failOnSelfModifying = failOnSelfMod
@@ -183,7 +184,12 @@ func saveBinary(filename string) {
 // while we can add tst instructions, we can also check the next instruction to see if the flags are overwritten,
 // making any tst on the current instruction obsolete.
 func nextSetsNZ() bool {
-	return InstructionsSetNV[data[pc-loadAddress]]
+	code := data[pc-loadAddress]
+	opcode, exists := opCodeMap[code]
+	if !exists {
+		log.Fatalf("Opcode not found: %02x\n", code)
+	}
+	return opcode.flags&(FLAG_N|FLAG_Z) == (FLAG_N | FLAG_Z)
 }
 
 // fetches the next byte and returns the calculated PC relative address. for branch instructions.
@@ -221,7 +227,7 @@ func nextWord() uint16 {
 // if the address contains a jump instruction, follow all jumps to their final address.
 // this helps eliminate jump tables and indirect jumps used by shorter range branch instructions.
 func flattenJumpAddress(addr uint16) uint16 {
-	for byteAt(addr) == JMP {
+	for byteAt(addr) == JMP_A {
 		voidMap[addr] = true   // mark potential elimination of this instruction
 		voidMap[addr+1] = true // if not required on other paths
 		voidMap[addr+2] = true
@@ -242,16 +248,17 @@ func transcode(address uint16, stop uint16) {
 		}
 
 		ins := nextByte()
+		opcode := getOpcode(ins)
 		totalInstructions++
 		totalOpcodes[ins] = true
 		switch ins {
-		case JMP:
+		case JMP_A:
 			addr := flattenJumpAddress(nextWord())
 			fmt.Printf("rjmp L%04x                    ; JMP $%04x\n", addr, addr)
-		case JSR:
+		case JSR_A:
 			addr := flattenJumpAddress(nextWord())
 			fmt.Printf("rcall L%04x                   ; JSR $%04x\n", addr, addr)
-		case STA:
+		case STA_A:
 			addr := nextWord()
 			if addr&0xff00 == 0xd400 {
 				fmt.Printf("mov %s, %s                  ; STA $%04x (SID)\n", REGT, REGA, addr)
@@ -266,8 +273,8 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("sts zero+0x%02x, %s            ; STA $%02x\n", addr, REGA, addr)
 			storeMap[addr] = true
-			pushMaxZero(addr)
-		case STX:
+			trackZeroPage(addr)
+		case STX_A:
 			addr := nextWord()
 			if addr&0xff00 == 0xd400 {
 				fmt.Printf("mov %s, %s                  ; STX $%04x (SID)\n", REGT, REGX, addr)
@@ -278,7 +285,7 @@ func transcode(address uint16, stop uint16) {
 				checkSelfMod(addr)
 				storeMap[addr] = true
 			}
-		case STY:
+		case STY_A:
 			addr := nextWord()
 			if motr && addr == 0x83b6 {
 				// STY $83b6 is known to update INC / DEC instructions - we will store this value at zero[0]
@@ -305,7 +312,14 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
 			loadMap[addr] = true
 			carryInverted = true
-		case CMP_X:
+		case CMP_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s,zero+0x%02x             ; CMP ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        cp %s, %s\n", REGA, REGT)
+			loadMap[addr] = true
+			carryInverted = true
+			trackZeroPage(addr)
+		case CMP_AX:
 			loadIndexed(REGT, REGX, "CMP", "X")
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
 			carryInverted = true
@@ -315,7 +329,7 @@ func transcode(address uint16, stop uint16) {
 		case CPY:
 			immediate("cpi", REGY, "CPY")
 			carryInverted = true
-		case BIT:
+		case BIT_A:
 			// BIT sets the Z flag as though the value in the address tested were ANDed with the accumulator.
 			// The N and V flags are set to match bits 7 and 6 respectively in the value stored at the tested address.
 			addr := nextWord()
@@ -360,12 +374,17 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("lds %s, ram+0x%04x           ; LDA $%04x\n", REGA, addr-ramStart, addr)
 			checkTest(REGA)
 			loadMap[addr] = true
-		case LDA_X:
+		case LDA_AX:
 			loadIndexed(REGA, REGX, "LDA", "X")
 			checkTest(REGA)
-		case LDA_Y:
+		case LDA_AY:
 			loadIndexed(REGA, REGY, "LDA", "Y")
 			checkTest(REGA)
+		case LDA_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x           ; LDA ($%02x)\n", REGA, addr, addr)
+			checkTest(REGA)
+			loadMap[addr] = true
 		case LDX:
 			immediate("ldi", REGX, "LDX")
 			checkTest(REGX)
@@ -382,14 +401,30 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("lds %s, ram+0x%04x           ; LDY $%04x\n", REGY, addr-ramStart, addr)
 			checkTest(REGY)
 			loadMap[addr] = true
-		case LDY_X:
+		case LDY_AX:
 			loadIndexed(REGY, REGX, "LDY", "X")
 			checkTest(REGY)
-		case INC_X:
+		case INC_AX:
 			loadIndexed(REGT, REGX, "INC", "X")
 			fmt.Printf("        inc %s\n", REGT)
 			fmt.Printf("        st X, %s\n", REGT)
-		case DEC_X:
+		case INC_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s,zero+0x%02x             ; INC ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        inc %s\n", REGT)
+			fmt.Printf("        sts zero+0x%02x, %s\n", addr, REGT)
+			checkTest(REGT)
+			storeMap[addr] = true
+			trackZeroPage(addr)
+		case DEC_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s,zero+0x%02x             ; DEC ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        dec %s\n", REGT)
+			fmt.Printf("        sts zero+0x%02x, %s\n", addr, REGT)
+			checkTest(REGT)
+			storeMap[addr] = true
+			trackZeroPage(addr)
+		case DEC_AX:
 			loadIndexed(REGT, REGX, "DEC", "X")
 			fmt.Printf("        dec %s\n", REGT)
 			fmt.Printf("        st X, %s\n", REGT)
@@ -407,12 +442,12 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        out 0x3f, %s\n", REGS)
 			fmt.Printf("        ld %s, X\n", REGA)
 			checkTest(REGA)
-			pushMaxZero(addr + 1) // address will be 2 byte pointer
+			trackZeroPage(addr + 1) // address will be 2 byte pointer
 			loadMap[addr] = true
 			loadMap[addr+1] = true
-		case STA_X:
+		case STA_AX:
 			storeIndexed(REGA, REGX, "STA", "X")
-		case STA_Y:
+		case STA_AY:
 			storeIndexed(REGA, REGY, "STA", "Y")
 		case ADC:
 			value := nextByte()
@@ -425,11 +460,11 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        adc %s, %s\n", REGA, REGT)
 			loadMap[addr] = true
 			carryInverted = false
-		case ADC_X:
+		case ADC_AX:
 			loadIndexed(REGT, REGX, "ADC", "X")
 			fmt.Printf("        adc %s, %s\n", REGA, REGT)
 			carryInverted = false
-		case ADC_Y:
+		case ADC_AY:
 			loadIndexed(REGT, REGY, "ADC", "Y")
 			fmt.Printf("        adc %s, %s\n", REGA, REGT)
 			carryInverted = false
@@ -448,11 +483,11 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
 			loadMap[addr] = true
 			carryInverted = true
-		case SBC_X:
+		case SBC_AX:
 			loadIndexed(REGT, REGX, "SBC", "X")
 			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
 			carryInverted = true
-		case SBC_Y:
+		case SBC_AY:
 			loadIndexed(REGT, REGY, "SBC", "Y")
 			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
 			carryInverted = true
@@ -548,8 +583,7 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("pop %s                       ; PLP\n", REGS)
 			fmt.Printf("        out 0x3f, %s\n", REGS)
 		default:
-			fmt.Printf("; UNKNOWN INSTRUCTION %02x\n", ins)
-			log.Fatal(fmt.Sprintf("UNKNOWN INSTRUCTION %02x\n", ins))
+			log.Fatalf("; UNMAPPED OPCODE %v\n", opcode)
 			return
 		}
 	}
@@ -613,7 +647,7 @@ func immediate(immediateIns string, reg string, ins string) {
 	fmt.Printf("%-4s %s, 0x%02x                ; %s #$%02x\n", immediateIns, reg, value, ins, value)
 }
 
-func pushMaxZero(val uint8) {
+func trackZeroPage(val uint8) {
 	if maxZero < val {
 		maxZero = val
 	}
@@ -621,7 +655,7 @@ func pushMaxZero(val uint8) {
 
 func checkSelfMod(addr uint16) {
 	if failOnSelfModifying && codeMap[addr] {
-		log.Fatal(fmt.Sprintf("SELF-MODIFYING CODE TO $%04x - PC $%04x\n", addr, pc))
+		log.Fatalf("SELF-MODIFYING CODE TO $%04x - PC $%04x\n", addr, pc)
 	}
 }
 
@@ -637,11 +671,11 @@ func searchCodeBlocks(start uint16) {
 	for {
 		ins := nextByte()
 		switch ins {
-		case JMP:
+		case JMP_A:
 			searchCodeBlocks(nextWord())
 			pc = savePc
 			return
-		case JSR:
+		case JSR_A:
 			searchCodeBlocks(nextWord())
 		case BCS, BCC, BVS, BVC, BPL, BMI, BNE, BEQ:
 			searchCodeBlocks(nextByteRelativeAddress())
@@ -649,14 +683,14 @@ func searchCodeBlocks(start uint16) {
 			pc = savePc
 			return
 		default:
-			size, exists := InstructionBytes[ins]
+			opcode, exists := opCodeMap[ins]
 			if !exists {
-				log.Fatal(fmt.Sprintf("INSTRUCTION SIZE UNKOWN %02x\n", ins))
+				log.Fatalf("UNKNOWN INSTRUCTION %02x at $%04x\n", ins, pc)
 			}
-			for c := 1; c < size; c++ {
+			for c := 1; c < int(opcode.bytes); c++ {
 				codeMap[pc+uint16(c-1)] = true
 			}
-			pc += uint16(size - 1)
+			pc += uint16(opcode.bytes - 1)
 		}
 	}
 }

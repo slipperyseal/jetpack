@@ -4,7 +4,7 @@
 
 SID chip tunes are 6502 processor code and binary data which actually run on the Commodore 64.
 Rather than try to squeeze a 6502 emulator on the AVR, Jetpack cross assembles the play routine and data.
-More than 60 of the 6502s 151 instructions are mapped to AVR assembler and writes the SID chip are intercepted.
+75 of the 6502s 151 instructions are mapped to AVR assembler with writes the SID chip intercepted.
 It searches execution paths to determine code block boundaries.
 While many 6502 instructions are implemented, there are more to be mapped.
 Special cases are also implemented to deal with self-modifying code. 
