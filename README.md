@@ -78,7 +78,7 @@ This was the main driver for the project. Emulation might be more accurate, but 
 
 - Can't cover all corner cases or self-modifying code that emulation can.
 
-- Not all opcodes supported. eg. JMP indirect
+- Not all opcodes supported. eg. JMP indirect, decimal mode, some special stack instructions.
 
 #### Example cross assembly
 

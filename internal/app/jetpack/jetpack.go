@@ -385,11 +385,16 @@ func transcode(address uint16, stop uint16) {
 		case CPY:
 			immediate("cpi", REGY, "CPY")
 			carryInverted = true
-		case BIT_A:
+		case BIT_A, BIT_Z:
 			// BIT sets the Z flag as though the value in the address tested were ANDed with the accumulator.
 			// The N and V flags are set to match bits 7 and 6 respectively in the value stored at the tested address.
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; BIT $%04x\n", REGT, addr-ramStart, addr)
+			if ins == BIT_A {
+				addr := nextWord()
+				fmt.Printf("lds %s, ram+0x%04x           ; BIT $%04x\n", REGT, addr-ramStart, addr)
+			} else {
+				addr := nextByte()
+				fmt.Printf("lds %s, zero+0x%02x           ; BIT ($%02x)\n", REGT, addr, addr)
+			}
 			fmt.Printf("        mov %s, %s\n", REGU, REGT)
 			fmt.Printf("        and %s, %s\n", REGU, REGA) // A and M -> Z
 			fmt.Printf("        cln\n")
@@ -475,21 +480,9 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        inc %s\n", REGT)
 			fmt.Printf("        st X, %s\n", REGT)
 		case INC_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s,zero+0x%02x             ; INC ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        inc %s\n", REGT)
-			fmt.Printf("        sts zero+0x%02x, %s\n", addr, REGT)
-			checkTest(REGT)
-			accessMap[addr] = true
-			trackZeroPage(addr)
+			zeroPageUpdate("inc", "INC")
 		case DEC_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s,zero+0x%02x             ; DEC ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        dec %s\n", REGT)
-			fmt.Printf("        sts zero+0x%02x, %s\n", addr, REGT)
-			checkTest(REGT)
-			accessMap[addr] = true
-			trackZeroPage(addr)
+			zeroPageUpdate("dec", "DEC")
 		case DEC_AX:
 			loadIndexed(REGT, REGX, "DEC", "X")
 			fmt.Printf("        dec %s\n", REGT)
@@ -560,6 +553,8 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        ror %s\n", REGT)
 			fmt.Printf("        sts ram+0x%04x, %s\n", addr-ramStart, REGT)
 			accessMap[addr] = true
+		case ROR_Z:
+			zeroPageUpdate("ror", "ROR")
 		case INC_A:
 			addr := nextWord()
 			fmt.Printf("lds %s, ram+0x%04x           ; INC $%04x\n", REGT, addr-ramStart, addr)
@@ -588,6 +583,8 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("lsl %s                       ; ASL\n", REGA)
 		case LSR:
 			fmt.Printf("lsr %s                       ; LSR\n", REGA)
+		case LSR_Z:
+			zeroPageUpdate("lsr", "LSR")
 		case TAX:
 			fmt.Printf("mov %s, %s                  ; TAX\n", REGX, REGA)
 			checkTest(REGX)
@@ -702,6 +699,16 @@ func storeIndexed(reg string, indexReg string, ins string, insIndex string) {
 	accessMap[addr] = true
 }
 
+func zeroPageUpdate(asm string, code string) {
+	addr := nextByte()
+	fmt.Printf("lds %s,zero+0x%02x             ; %s ($%02x)\n", REGT, addr, code, addr)
+	fmt.Printf("        %s %s\n", asm, REGT)
+	fmt.Printf("        sts zero+0x%02x, %s\n", addr, REGT)
+	checkTest(REGT)
+	accessMap[addr] = true
+	trackZeroPage(addr)
+}
+
 func immediate(immediateIns string, reg string, ins string) {
 	value := nextByte()
 	fmt.Printf("%-4s %s, 0x%02x                ; %s #$%02x\n", immediateIns, reg, value, ins, value)
@@ -743,7 +750,7 @@ func searchCodeBlocks(start uint16) {
 		case RTS:
 			pc = savePc
 			return
-		case JMP_I, TSX, TXS, SED:
+		case JMP_I, TSX, TXS, SED, CLD:
 			log.Fatalf("UNSUPPORTED INSTRUCTION at $%04x %v\n", pc, opcode)
 		default:
 			for c := uint8(1); c < opcode.bytes; c++ {

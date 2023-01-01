@@ -27,6 +27,7 @@ type OpCode struct {
 
 var modeMap = map[string]string{
 	"immediate":    "",
+	"implied":      "",
 	"zeropage":     "_Z",
 	"zeropage,X":   "_ZX",
 	"zeropage,Y":   "_ZY",
