@@ -17,7 +17,7 @@ var loadAddress uint16
 var pc uint16                           // 6502 program counter
 var ramStart uint16                     // offset at which ram block starts
 var ramLen uint16                       // length of ram block
-var maxZero uint8 = 0                   // often only the lower bit of zero page is used, so we track the highest read or write
+var zeroPageLen uint16                  // often only the lower bit of zero page is used, so we track the highest read or write
 var totalInstructions = 0               // count total instructions translated
 var totalOpcodes = make(map[uint8]bool) // track op codes we've translated
 var codeMap [0x10000]bool               // code at this address
@@ -94,9 +94,9 @@ func writeRamSpaces() {
 	fmt.Printf(".global  zero\n")
 	fmt.Printf("        .section .bss\n")
 	fmt.Printf("        .type zero, @object\n")
-	fmt.Printf("        .size zero, %d\n", maxZero+1)
+	fmt.Printf("        .size zero, %d\n", zeroPageLen)
 	fmt.Printf("zero:\n")
-	fmt.Printf("        .zero %d\n\n", maxZero+1)
+	fmt.Printf("        .zero %d\n\n", zeroPageLen)
 
 	writeWordValue("songcount", sidHeader.Songs)
 	writeWordValue("songstart", sidHeader.StartSong)
@@ -141,7 +141,7 @@ func writeSuffix() {
 
 	fmt.Printf(";   6502 opcodes translated: %d of %d\n", len(totalOpcodes), len(opCodeMap))
 	fmt.Printf(";   instructions translated: %d\n", totalInstructions)
-	fmt.Printf(";          zero page length: %d\n", maxZero+1)
+	fmt.Printf(";          zero page length: %d\n", zeroPageLen)
 	fmt.Printf(";          RAM block length: %d\n", ramLen)
 	fmt.Printf(";          RAM access range: $%04x - $%04x\n", lowestRAMAccess(), highestRAMAccess())
 	fmt.Printf(";   Thank you for your cooperation.\n\n")
@@ -271,7 +271,6 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("sts zero+0x%02x, %s            ; STA $%02x\n", addr, REGA, addr)
 			accessMap[addr] = true
-			trackZeroPage(addr)
 		case STX_A:
 			addr := nextWord()
 			if addr&0xff00 == 0xd400 {
@@ -287,7 +286,6 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("sts zero+0x%02x, %s            ; STX $%02x\n", addr, REGX, addr)
 			accessMap[addr] = true
-			trackZeroPage(addr)
 		case STY_A:
 			addr := nextWord()
 			if motr && addr == 0x83b6 {
@@ -302,7 +300,6 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("sts zero+0x%02x, %s            ; STY $%02x\n", addr, REGY, addr)
 			accessMap[addr] = true
-			trackZeroPage(addr)
 		case AND:
 			immediate("andi", REGA, "AND")
 		case AND_A:
@@ -314,7 +311,6 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("lds %s,zero+0x%02x             ; AND ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        and %s, %s\n", REGA, REGT)
-			trackZeroPage(addr)
 		case AND_AX:
 			loadIndexed(REGT, REGX, "AND", "X")
 			fmt.Printf("        and %s, %s\n", REGA, REGT)
@@ -332,7 +328,6 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("lds %s,zero+0x%02x             ; ORA ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        or %s, %s\n", REGA, REGT)
-			trackZeroPage(addr)
 		case ORA_AX:
 			loadIndexed(REGT, REGX, "ORA", "X")
 			fmt.Printf("        or %s, %s\n", REGA, REGT)
@@ -352,7 +347,6 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("lds %s,zero+0x%02x             ; EOR ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        eor %s, %s\n", REGA, REGT)
-			trackZeroPage(addr)
 		case EOR_AX:
 			loadIndexed(REGT, REGX, "EOR", "X")
 			fmt.Printf("        eor %s, %s\n", REGA, REGT)
@@ -374,7 +368,6 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
 			accessMap[addr] = true
 			carryInverted = true
-			trackZeroPage(addr)
 		case CMP_AX:
 			loadIndexed(REGT, REGX, "CMP", "X")
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
@@ -501,7 +494,6 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        out 0x3f, %s\n", REGS)
 			fmt.Printf("        ld %s, X\n", REGA)
 			checkTest(REGA)
-			trackZeroPage(addr + 1) // address will be 2 byte pointer
 			accessMap[addr] = true
 			accessMap[addr+1] = true
 		case STA_AX:
@@ -597,18 +589,6 @@ func transcode(address uint16, stop uint16) {
 		case TYA:
 			fmt.Printf("mov %s, %s                  ; TYA\n", REGA, REGY)
 			checkTest(REGA)
-		case NOP:
-			// 6502 NOPs were either for padding or timing, neither of which apply here
-			fmt.Printf("                              ; NOP\n")
-		case BRK:
-			// ¯\_(ツ)_/¯
-			fmt.Printf("                              ; BRK\n")
-		case SEI:
-			// ¯\_(ツ)_/¯
-			fmt.Printf("                              ; SEI\n")
-		case CLI:
-			// ¯\_(ツ)_/¯
-			fmt.Printf("                              ; CLI\n")
 		case CLC:
 			fmt.Printf("clc                           ; CLC\n")
 			carryInverted = false
@@ -640,6 +620,10 @@ func transcode(address uint16, stop uint16) {
 		case PLP:
 			fmt.Printf("pop %s                       ; PLP\n", REGS)
 			fmt.Printf("        out 0x3f, %s\n", REGS)
+		case NOP, BRK, SEI, CLI:
+			// 6502 NOPs were either for padding or timing, neither of which apply here
+			fmt.Printf("                              ; %s\n", opcode.ins)
+			voidMap[pc-1] = true
 		default:
 			log.Fatalf("UNMAPPED OPCODE at %04x: %v\n", pc-1, opcode)
 		}
@@ -706,18 +690,11 @@ func zeroPageUpdate(asm string, code string) {
 	fmt.Printf("        sts zero+0x%02x, %s\n", addr, REGT)
 	checkTest(REGT)
 	accessMap[addr] = true
-	trackZeroPage(addr)
 }
 
 func immediate(immediateIns string, reg string, ins string) {
 	value := nextByte()
 	fmt.Printf("%-4s %s, 0x%02x                ; %s #$%02x\n", immediateIns, reg, value, ins, value)
-}
-
-func trackZeroPage(val uint8) {
-	if maxZero < val {
-		maxZero = val
-	}
 }
 
 func checkSelfMod(addr uint16) {
@@ -788,6 +765,11 @@ func transcodeBlocks() {
 				transcode(start, uint16(index-1))
 			}
 			change = code
+		}
+	}
+	for index := 0; index < 0xff; index++ {
+		if accessMap[index] {
+			zeroPageLen = uint16(index) + 1
 		}
 	}
 }
