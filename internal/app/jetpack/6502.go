@@ -39,10 +39,10 @@ func buildOpCodeMap() map[uint8]OpCode {
 	return m
 }
 
-func getOpcode(code uint8) OpCode {
+func getOpcode(code uint8, location uint16) OpCode {
 	opcode, exists := opCodeMap[code]
 	if !exists {
-		log.Fatalf("UNKNOWN OPCODE %02x\n", code)
+		log.Fatalf("UNKNOWN OPCODE %02x at %04x\n", code, location)
 	}
 	return opcode
 }

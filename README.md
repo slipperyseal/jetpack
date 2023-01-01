@@ -2,15 +2,15 @@
 
 ### 6502 to AVR cross assembler
 
-SID chip tunes are 6502 processor code and binary data which actually run on the Commodore 64.
-Rather than try to squeeze a 6502 emulator on the AVR, Jetpack cross assembles the play routine and data.
-75 of the 6502s 151 instructions are mapped to AVR assembler with writes the SID chip intercepted.
-It searches execution paths to determine code block boundaries.
-While many 6502 instructions are implemented, there are more to be mapped.
-Special cases are also implemented to deal with self-modifying code. 
+SID chip tunes are a block of 6502 code and data which actually run on a Commodore 64 or an emulator.
+Rather than try to squeeze a 6502 emulator on the AVR, Jetpack cross assembles the 6502 code to AVR assembler.
+Many of the 6502s 151 instructions are mapped to AVR assembler with writes the SID chip intercepted.
+Jetpack searches all execution paths to determine code block boundaries.
+Special cases are also implemented to deal with self-modifying code.
+Not all instructions are yet implemented and some instructions can't easily be supported.
 
-The current implementation was written (at least initially) to cross-compile the
-`Monty On The Run` SID tune, to the AVR to run on the Monty Stereo SID Synth.
+Jetpack was originally written to cross-compile a single SID, `Monty On The Run`,
+so it can play on the Monty Stereo SID Synth. Other SIDs have been successfully converted.
 
 https://github.com/slipperyseal/monty
 
@@ -22,19 +22,17 @@ https://www.youtube.com/watch?v=i0d1r9NZg9I
 
 #### Run
 
-Jetpak is written in `go`.  If you don't have that, get it hyair...
+Jetpak is written in `go`.
 
-https://golang.org/doc/install
-
-Jetpack loads SID files and writes the AVR assembler to standard out. This assembler is compatible with `AVR-GCC`.
+Jetpack loads SID files and writes the AVR assembler to standard out.
+This assembler is compatible with `avr-gcc`.
 
     go run jetpack.go Monty_on_the_Run.sid >motr.avr.s
 
 See `jetpack.go` for command line options and their defaults.
 
-Jetpack was originally written to convert `Monty_on_the_Run.sid`.
-Other SIDs have been successfully converted, but success depends on how that code works,
-Self-modifying code being the main issue. 6502 code might replace its own instructions in memory or
+For Jetpack to successfully convert a SID will depend on how the SID code works.
+Self-modifying code is the main issue. 6502 code might replace its own instructions in memory or
 immediate values loaded by instructions. AVR code exists in flash memory, not SRAM, plus the replacement of
 AVR code or data might not be practical solution anyway. These cases need to be identified and dealt with independently. 
 
@@ -70,7 +68,7 @@ Emulation on AVRs with limited memory would still need to deal with a partial me
 This was the main driver for the project. Emulation might be more accurate, but the project was originally targeting one piece of code
 (not to mention it being a cool challenge).
 
-- Call functions direct from C etc.
+- Call functions direct from C.
 
 ##### Cons
 
@@ -79,6 +77,8 @@ This was the main driver for the project. Emulation might be more accurate, but 
 - Code density. 6502 code is much denser than the cross compile. For large code blocks emulation is perhaps preferred.
 
 - Can't cover all corner cases or self-modifying code that emulation can.
+
+- Not all opcodes supported. eg. JMP indirect
 
 #### Example cross assembly
 
@@ -102,7 +102,7 @@ This was the main driver for the project. Emulation might be more accurate, but 
 
 ##### AVR output
 
-    L8367:  ldi  r18, 0xff                ; LDY #$ff
+    L8367:  ldi r18, 0xff                 ; LDY #$ff
             lds r16, ram+0x00fb           ; LDA $84fb
             tst r16
             brne L8374                    ; BNE $8374
@@ -114,7 +114,7 @@ This was the main driver for the project. Emulation might be more accurate, but 
             dec r17                       ; DEX
             brmi L837d                    ; BMI $837d
             rjmp L805f                    ; JMP $805f
-    L837d:  ldi  r16, 0xff                ; LDA #$ff
+    L837d:  ldi r16, 0xff                 ; LDA #$ff
             tst r16
             sts ram+0x00fd, r16           ; STA $84fd
             lds r16, ram+0x00fb           ; LDA $84fb
