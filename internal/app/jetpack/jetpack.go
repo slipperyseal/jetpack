@@ -56,7 +56,6 @@ func BlastOff(path string, failOnSelfMod bool, printAllLab bool, writeBin bool, 
 		ramStart = ramBase
 	}
 	ramLen = uint16(len(data)) - (ramStart - loadAddress)
-
 	searchCodeBlocks(sidHeader.InitAddress)
 	searchCodeBlocks(sidHeader.PlayAddress)
 
@@ -225,10 +224,15 @@ func nextWord() uint16 {
 // if the address contains a jump instruction, follow all jumps to their final address.
 // this helps eliminate jump tables and indirect jumps used by shorter range branch instructions.
 func flattenJumpAddress(addr uint16) uint16 {
+	var visited = make(map[uint16]bool)
 	for byteAt(addr) == JMP_A {
 		voidMap[addr] = true   // mark potential elimination of this instruction
 		voidMap[addr+1] = true // if not required on other paths
 		voidMap[addr+2] = true
+		if visited[addr] { // infinite loop detection
+			return addr
+		}
+		visited[addr] = true
 		addr = wordAt(addr + 1)
 	}
 	return addr
@@ -309,7 +313,7 @@ func transcode(address uint16, stop uint16) {
 			accessMap[addr] = true
 		case AND_Z:
 			addr := nextByte()
-			fmt.Printf("lds %s,zero+0x%02x             ; AND ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("lds %s, zero+0x%02x             ; AND ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        and %s, %s\n", REGA, REGT)
 		case AND_AX:
 			loadIndexed(REGT, REGX, "AND", "X")
@@ -326,7 +330,7 @@ func transcode(address uint16, stop uint16) {
 			accessMap[addr] = true
 		case ORA_Z:
 			addr := nextByte()
-			fmt.Printf("lds %s,zero+0x%02x             ; ORA ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("lds %s, zero+0x%02x             ; ORA ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        or %s, %s\n", REGA, REGT)
 		case ORA_AX:
 			loadIndexed(REGT, REGX, "ORA", "X")
@@ -345,7 +349,7 @@ func transcode(address uint16, stop uint16) {
 			accessMap[addr] = true
 		case EOR_Z:
 			addr := nextByte()
-			fmt.Printf("lds %s,zero+0x%02x             ; EOR ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("lds %s, zero+0x%02x             ; EOR ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        eor %s, %s\n", REGA, REGT)
 		case EOR_AX:
 			loadIndexed(REGT, REGX, "EOR", "X")
@@ -364,7 +368,7 @@ func transcode(address uint16, stop uint16) {
 			carryInverted = true
 		case CMP_Z:
 			addr := nextByte()
-			fmt.Printf("lds %s,zero+0x%02x             ; CMP ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("lds %s, zero+0x%02x             ; CMP ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
 			accessMap[addr] = true
 			carryInverted = true
@@ -372,11 +376,39 @@ func transcode(address uint16, stop uint16) {
 			loadIndexed(REGT, REGX, "CMP", "X")
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
 			carryInverted = true
+		case CMP_AY:
+			loadIndexed(REGT, REGY, "CMP", "Y")
+			fmt.Printf("        cp %s, %s\n", REGA, REGT)
+			carryInverted = true
 		case CPX:
 			immediate("cpi", REGX, "CPX")
 			carryInverted = true
+		case CPX_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; CPX $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        cp %s, %s\n", REGX, REGT)
+			accessMap[addr] = true
+			carryInverted = true
+		case CPX_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; CPX ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        cp %s, %s\n", REGX, REGT)
+			accessMap[addr] = true
+			carryInverted = true
 		case CPY:
 			immediate("cpi", REGY, "CPY")
+			carryInverted = true
+		case CPY_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; CPY $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        cp %s, %s\n", REGY, REGT)
+			accessMap[addr] = true
+			carryInverted = true
+		case CPY_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; CPY ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        cp %s, %s\n", REGY, REGT)
+			accessMap[addr] = true
 			carryInverted = true
 		case BIT_A, BIT_Z:
 			// BIT sets the Z flag as though the value in the address tested were ANDed with the accumulator.
@@ -472,6 +504,8 @@ func transcode(address uint16, stop uint16) {
 			loadIndexed(REGT, REGX, "INC", "X")
 			fmt.Printf("        inc %s\n", REGT)
 			fmt.Printf("        st X, %s\n", REGT)
+		case INC_A:
+			absoluteUpdate("inc", "INC")
 		case INC_Z:
 			zeroPageUpdate("inc", "INC")
 		case DEC_Z:
@@ -511,6 +545,12 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        adc %s, %s\n", REGA, REGT)
 			accessMap[addr] = true
 			carryInverted = false
+		case ADC_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; ADC ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        adc %s, %s\n", REGA, REGT)
+			accessMap[addr] = true
+			carryInverted = false
 		case ADC_AX:
 			loadIndexed(REGT, REGX, "ADC", "X")
 			fmt.Printf("        adc %s, %s\n", REGA, REGT)
@@ -523,6 +563,10 @@ func transcode(address uint16, stop uint16) {
 			value := nextByte()
 			fmt.Printf("sbci %s, 0x%02x                ; SBC #$%02x\n", REGA, value, value)
 			carryInverted = true
+		case SBC_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; SBC ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        sbci %s, %s\n", REGA, REGT)
 		case SBC_A:
 			addr := nextWord()
 			fmt.Printf("lds %s, ram+0x%04x           ; SBC $%04x\n", REGT, addr-ramStart, addr)
@@ -539,23 +583,13 @@ func transcode(address uint16, stop uint16) {
 			carryInverted = true
 		case ROR:
 			fmt.Printf("        ror %s\n", REGA)
-		case ROR_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; ROR $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        ror %s\n", REGT)
-			fmt.Printf("        sts ram+0x%04x, %s\n", addr-ramStart, REGT)
-			accessMap[addr] = true
 		case ROR_Z:
 			zeroPageUpdate("ror", "ROR")
-		case INC_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; INC $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        inc %s\n", REGT)
-			fmt.Printf("        sts ram+0x%04x, %s\n", addr-ramStart, REGT)
-			accessMap[addr] = true
+		case ROR_A:
+			absoluteUpdate("ror", "ROR")
 		case DEC_A:
-			addr := nextWord()
-			if motr && pc-3 == 0x83b6 {
+			if motr && pc-1 == 0x83b6 {
+				addr := nextWord()
 				// DEC at $83b6 is known to be updated to INC / DEC instructions - we will store this value at zero[0]
 				fmt.Printf("lds %s, ram+0x%04x           ; DEC $%04x (SELF MODIFYING)\n", REGT, addr-ramStart, addr)
 				fmt.Printf("        lds %s, zero+0x%02x\n", REGU, 0)
@@ -565,16 +599,18 @@ func transcode(address uint16, stop uint16) {
 				fmt.Printf("        sbrc %s, 0\n", REGZ)
 				fmt.Printf("1:      dec %s\n", REGT)
 				fmt.Printf("        sts ram+0x%04x, %s\n", addr-ramStart, REGT)
+				accessMap[addr] = true
 			} else {
-				fmt.Printf("lds %s, ram+0x%04x           ; DEC $%04x\n", REGT, addr-ramStart, addr)
-				fmt.Printf("        dec %s\n", REGT)
-				fmt.Printf("        sts ram+0x%04x, %s\n", addr-ramStart, REGT)
+				absoluteUpdate("dec", "DEC")
 			}
-			accessMap[addr] = true
 		case ASL:
 			fmt.Printf("lsl %s                       ; ASL\n", REGA)
+		case ASL_Z:
+			zeroPageUpdate("lsl", "ASL")
 		case LSR:
 			fmt.Printf("lsr %s                       ; LSR\n", REGA)
+		case LSR_A:
+			absoluteUpdate("lsr", "LSR")
 		case LSR_Z:
 			zeroPageUpdate("lsr", "LSR")
 		case TAX:
@@ -683,12 +719,19 @@ func storeIndexed(reg string, indexReg string, ins string, insIndex string) {
 	accessMap[addr] = true
 }
 
+func absoluteUpdate(asm string, code string) {
+	addr := nextWord()
+	fmt.Printf("lds %s, ram+0x%04x           ; %s $%04x\n", REGT, addr-ramStart, code, addr)
+	fmt.Printf("        %s %s\n", asm, REGT)
+	fmt.Printf("        sts ram+0x%04x, %s\n", addr-ramStart, REGT)
+	accessMap[addr] = true
+}
+
 func zeroPageUpdate(asm string, code string) {
 	addr := nextByte()
-	fmt.Printf("lds %s,zero+0x%02x             ; %s ($%02x)\n", REGT, addr, code, addr)
+	fmt.Printf("lds %s, zero+0x%02x             ; %s ($%02x)\n", REGT, addr, code, addr)
 	fmt.Printf("        %s %s\n", asm, REGT)
 	fmt.Printf("        sts zero+0x%02x, %s\n", addr, REGT)
-	checkTest(REGT)
 	accessMap[addr] = true
 }
 
@@ -728,7 +771,7 @@ func searchCodeBlocks(start uint16) {
 			pc = savePc
 			return
 		case JMP_I, TSX, TXS, SED, CLD:
-			log.Fatalf("UNSUPPORTED INSTRUCTION at $%04x %v\n", pc, opcode)
+			log.Fatalf("UNSUPPORTED INSTRUCTION at $%04x %v\n", pc-1, opcode)
 		default:
 			for c := uint8(1); c < opcode.bytes; c++ {
 				nextByte()
