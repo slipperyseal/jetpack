@@ -254,12 +254,352 @@ func transcode(address uint16, stop uint16) {
 		totalInstructions++
 		totalOpcodes[ins] = true
 		switch ins {
+		case ADC:
+			value := nextByte()
+			fmt.Printf("ldi %s, 0x%02x                 ; ADC #$%02x\n", REGT, value, value)
+			fmt.Printf("        adc %s, %s\n", REGA, REGT)
+			carryInverted = false
+		case ADC_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; ADC $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        adc %s, %s\n", REGA, REGT)
+			accessMap[addr] = true
+			carryInverted = false
+		case ADC_AX:
+			loadIndexed(REGT, REGX, "ADC", "X")
+			fmt.Printf("        adc %s, %s\n", REGA, REGT)
+			carryInverted = false
+		case ADC_AY:
+			loadIndexed(REGT, REGY, "ADC", "Y")
+			fmt.Printf("        adc %s, %s\n", REGA, REGT)
+			carryInverted = false
+		case ADC_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; ADC ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        adc %s, %s\n", REGA, REGT)
+			accessMap[addr] = true
+			carryInverted = false
+		case AND:
+			immediate("andi", REGA, "AND")
+		case AND_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; AND $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        and %s, %s\n", REGA, REGT)
+			accessMap[addr] = true
+		case AND_AX:
+			loadIndexed(REGT, REGX, "AND", "X")
+			fmt.Printf("        and %s, %s\n", REGA, REGT)
+		case AND_AY:
+			loadIndexed(REGT, REGY, "AND", "Y")
+			fmt.Printf("        and %s, %s\n", REGA, REGT)
+		case AND_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; AND ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        and %s, %s\n", REGA, REGT)
+		case ASL:
+			fmt.Printf("lsl %s                       ; ASL\n", REGA)
+		case ASL_Z:
+			zeroPageUpdate("lsl", "ASL")
+		case BCC:
+			if carryInverted {
+				branch("brcs", "BCC")
+			} else {
+				branch("brcc", "BCC")
+			}
+		case BCS:
+			if carryInverted {
+				branch("brcc", "BCS")
+			} else {
+				branch("brcs", "BCS")
+			}
+		case BEQ:
+			branch("breq", "BEQ")
+		case BIT_A, BIT_Z:
+			// BIT sets the Z flag as though the value in the address tested were ANDed with the accumulator.
+			// The N and V flags are set to match bits 7 and 6 respectively in the value stored at the tested address.
+			if ins == BIT_A {
+				addr := nextWord()
+				fmt.Printf("lds %s, ram+0x%04x           ; BIT $%04x\n", REGT, addr-ramStart, addr)
+			} else {
+				addr := nextByte()
+				fmt.Printf("lds %s, zero+0x%02x           ; BIT ($%02x)\n", REGT, addr, addr)
+			}
+			fmt.Printf("        mov %s, %s\n", REGU, REGT)
+			fmt.Printf("        and %s, %s\n", REGU, REGA) // A and M -> Z
+			fmt.Printf("        cln\n")
+			fmt.Printf("        clv\n")
+			fmt.Printf("        sbrc %s, 7\n", REGT) // M bit 7 -> N
+			fmt.Printf("        sen\n")
+			fmt.Printf("        sbrc %s, 6\n", REGT) // M bit 6 -> V
+			fmt.Printf("        sev\n")
+		case BMI:
+			branch("brmi", "BMI")
+		case BNE:
+			branch("brne", "BNE")
+		case BPL:
+			branch("brpl", "BPL")
+		case BVC:
+			branch("brvc", "BVC")
+		case BVS:
+			branch("brvs", "BVS")
+		case CLC:
+			fmt.Printf("clc                           ; CLC\n")
+			carryInverted = false
+		case CLV:
+			fmt.Printf("clv                           ; CLV\n")
+		case CMP:
+			immediate("cpi", REGA, "CMP")
+			carryInverted = true
+		case CMP_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; CMP $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        cp %s, %s\n", REGA, REGT)
+			accessMap[addr] = true
+			carryInverted = true
+		case CMP_AX:
+			loadIndexed(REGT, REGX, "CMP", "X")
+			fmt.Printf("        cp %s, %s\n", REGA, REGT)
+			carryInverted = true
+		case CMP_AY:
+			loadIndexed(REGT, REGY, "CMP", "Y")
+			fmt.Printf("        cp %s, %s\n", REGA, REGT)
+			carryInverted = true
+		case CMP_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; CMP ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        cp %s, %s\n", REGA, REGT)
+			accessMap[addr] = true
+			carryInverted = true
+		case CPX:
+			immediate("cpi", REGX, "CPX")
+			carryInverted = true
+		case CPX_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; CPX $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        cp %s, %s\n", REGX, REGT)
+			accessMap[addr] = true
+			carryInverted = true
+		case CPX_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; CPX ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        cp %s, %s\n", REGX, REGT)
+			accessMap[addr] = true
+			carryInverted = true
+		case CPY:
+			immediate("cpi", REGY, "CPY")
+			carryInverted = true
+		case CPY_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; CPY $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        cp %s, %s\n", REGY, REGT)
+			accessMap[addr] = true
+			carryInverted = true
+		case CPY_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; CPY ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        cp %s, %s\n", REGY, REGT)
+			accessMap[addr] = true
+			carryInverted = true
+		case DEC_A:
+			if motr && pc-1 == 0x83b6 {
+				addr := nextWord()
+				// DEC at $83b6 is known to be updated to INC / DEC instructions - we will store this value at zero[0]
+				fmt.Printf("lds %s, ram+0x%04x           ; DEC $%04x (SELF MODIFYING)\n", REGT, addr-ramStart, addr)
+				fmt.Printf("        lds %s, zero+0x%02x\n", REGU, 0)
+				fmt.Printf("        cpi %s, 0x%02x\n", REGU, DEC_A)
+				fmt.Printf("        breq 1f\n")
+				fmt.Printf("        inc %s\n", REGT)
+				fmt.Printf("        sbrc %s, 0\n", REGZ)
+				fmt.Printf("1:      dec %s\n", REGT)
+				fmt.Printf("        sts ram+0x%04x, %s\n", addr-ramStart, REGT)
+				accessMap[addr] = true
+			} else {
+				absoluteUpdate("dec", "DEC")
+			}
+		case DEC_AX:
+			loadIndexed(REGT, REGX, "DEC", "X")
+			fmt.Printf("        dec %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
+		case DEC_Z:
+			zeroPageUpdate("dec", "DEC")
+		case DEX:
+			fmt.Printf("dec %s                       ; DEX\n", REGX)
+		case DEY:
+			fmt.Printf("dec %s                       ; DEY\n", REGY)
+		case EOR:
+			value := nextByte()
+			fmt.Printf("ldi %s, 0x%02x                 ; EOR #$%02x\n", REGT, value, value)
+			fmt.Printf("        eor %s, %s\n", REGA, REGT)
+		case EOR_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; EOR $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        eor %s, %s\n", REGA, REGT)
+			accessMap[addr] = true
+		case EOR_AX:
+			loadIndexed(REGT, REGX, "EOR", "X")
+			fmt.Printf("        eor %s, %s\n", REGA, REGT)
+		case EOR_AY:
+			loadIndexed(REGT, REGY, "EOR", "Y")
+			fmt.Printf("        eor %s, %s\n", REGA, REGT)
+		case EOR_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; EOR ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        eor %s, %s\n", REGA, REGT)
+		case INC_A:
+			absoluteUpdate("inc", "INC")
+		case INC_AX:
+			loadIndexed(REGT, REGX, "INC", "X")
+			fmt.Printf("        inc %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
+		case INC_Z:
+			zeroPageUpdate("inc", "INC")
+		case INX:
+			fmt.Printf("inc %s                       ; INX\n", REGX)
+		case INY:
+			fmt.Printf("inc %s                       ; INY\n", REGY)
 		case JMP_A:
 			addr := flattenJumpAddress(nextWord())
 			fmt.Printf("rjmp L%04x                    ; JMP $%04x\n", addr, addr)
 		case JSR_A:
 			addr := flattenJumpAddress(nextWord())
 			fmt.Printf("rcall L%04x                   ; JSR $%04x\n", addr, addr)
+		case LDA:
+			immediate("ldi", REGA, "LDA")
+			checkTest(REGA)
+		case LDA_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; LDA $%04x\n", REGA, addr-ramStart, addr)
+			checkTest(REGA)
+			accessMap[addr] = true
+		case LDA_AX:
+			loadIndexed(REGA, REGX, "LDA", "X")
+			checkTest(REGA)
+		case LDA_AY:
+			loadIndexed(REGA, REGY, "LDA", "Y")
+			checkTest(REGA)
+		case LDA_IY:
+			addr := nextByte()
+			fmt.Printf("lds r26,zero+0x%02x             ; LDA ($%02x),Y\n", addr, addr)
+			fmt.Printf("        lds r27,zero+0x%02x+1\n", addr)
+			fmt.Printf("        in %s, 0x3f\n", REGS)
+			fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
+			fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
+			fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
+			fmt.Printf("        sbci r27,hi8(-(ram))\n")
+			fmt.Printf("        add r26,%s\n", REGY) // add Y index
+			fmt.Printf("        adc r27,%s\n", REGZ)
+			fmt.Printf("        out 0x3f, %s\n", REGS)
+			fmt.Printf("        ld %s, X\n", REGA)
+			checkTest(REGA)
+			accessMap[addr] = true
+			accessMap[addr+1] = true
+		case LDA_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x           ; LDA ($%02x)\n", REGA, addr, addr)
+			checkTest(REGA)
+			accessMap[addr] = true
+		case LDX:
+			immediate("ldi", REGX, "LDX")
+			checkTest(REGX)
+		case LDX_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; LDX $%04x\n", REGX, addr-ramStart, addr)
+			checkTest(REGX)
+			accessMap[addr] = true
+		case LDX_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x           ; LDX ($%02x)\n", REGX, addr, addr)
+			checkTest(REGX)
+			accessMap[addr] = true
+		case LDY:
+			immediate("ldi", REGY, "LDY")
+			checkTest(REGY)
+		case LDY_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; LDY $%04x\n", REGY, addr-ramStart, addr)
+			checkTest(REGY)
+			accessMap[addr] = true
+		case LDY_AX:
+			loadIndexed(REGY, REGX, "LDY", "X")
+			checkTest(REGY)
+		case LDY_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x           ; LDY ($%02x)\n", REGY, addr, addr)
+			checkTest(REGY)
+			accessMap[addr] = true
+		case LSR:
+			fmt.Printf("lsr %s                       ; LSR\n", REGA)
+		case LSR_A:
+			absoluteUpdate("lsr", "LSR")
+		case LSR_Z:
+			zeroPageUpdate("lsr", "LSR")
+		case NOP, BRK, SEI, CLI:
+			// 6502 NOPs were either for padding or timing, neither of which apply here
+			fmt.Printf("                              ; %s\n", opcode.ins)
+			voidMap[pc-1] = true
+		case ORA:
+			immediate("ori", REGA, "ORA")
+		case ORA_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; ORA $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        or %s, %s\n", REGA, REGT)
+			accessMap[addr] = true
+		case ORA_AX:
+			loadIndexed(REGT, REGX, "ORA", "X")
+			fmt.Printf("        or %s, %s\n", REGA, REGT)
+		case ORA_AY:
+			loadIndexed(REGT, REGY, "ORA", "Y")
+			fmt.Printf("        or %s, %s\n", REGA, REGT)
+		case ORA_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; ORA ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        or %s, %s\n", REGA, REGT)
+		case PHA:
+			fmt.Printf("push %s                      ; PHA\n", REGA)
+		case PHP:
+			fmt.Printf("in %s, 0x3f                  ; PHP\n", REGS)
+			fmt.Printf("        push %s\n", REGS)
+		case PLA:
+			fmt.Printf("pop %s                       ; PLA\n", REGA)
+			checkTest(REGA)
+		case PLP:
+			fmt.Printf("pop %s                       ; PLP\n", REGS)
+			fmt.Printf("        out 0x3f, %s\n", REGS)
+		case ROR:
+			fmt.Printf("        ror %s\n", REGA)
+		case ROR_A:
+			absoluteUpdate("ror", "ROR")
+		case ROR_Z:
+			zeroPageUpdate("ror", "ROR")
+		case RTI:
+			fmt.Printf("ret                           ; RTI\n") // assume ISR has been wrapped by JSR
+		case RTS:
+			fmt.Printf("ret                           ; RTS\n")
+		case SBC:
+			value := nextByte()
+			fmt.Printf("sbci %s, 0x%02x                ; SBC #$%02x\n", REGA, value, value)
+			carryInverted = true
+		case SBC_A:
+			addr := nextWord()
+			fmt.Printf("lds %s, ram+0x%04x           ; SBC $%04x\n", REGT, addr-ramStart, addr)
+			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
+			accessMap[addr] = true
+			carryInverted = true
+		case SBC_AX:
+			loadIndexed(REGT, REGX, "SBC", "X")
+			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
+			carryInverted = true
+		case SBC_AY:
+			loadIndexed(REGT, REGY, "SBC", "Y")
+			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
+			carryInverted = true
+		case SBC_Z:
+			addr := nextByte()
+			fmt.Printf("lds %s, zero+0x%02x             ; SBC ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        sbci %s, %s\n", REGA, REGT)
+		case SEC:
+			fmt.Printf("sec                           ; SEC\n")
+			carryInverted = false
 		case STA_A:
 			addr := nextWord()
 			if addr&0xff00 == 0xd400 {
@@ -271,6 +611,10 @@ func transcode(address uint16, stop uint16) {
 				checkSelfMod(addr)
 				accessMap[addr] = true
 			}
+		case STA_AX:
+			storeIndexed(REGA, REGX, "STA", "X")
+		case STA_AY:
+			storeIndexed(REGA, REGY, "STA", "Y")
 		case STA_Z:
 			addr := nextByte()
 			fmt.Printf("sts zero+0x%02x, %s            ; STA $%02x\n", addr, REGA, addr)
@@ -304,315 +648,6 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("sts zero+0x%02x, %s            ; STY $%02x\n", addr, REGY, addr)
 			accessMap[addr] = true
-		case AND:
-			immediate("andi", REGA, "AND")
-		case AND_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; AND $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        and %s, %s\n", REGA, REGT)
-			accessMap[addr] = true
-		case AND_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x             ; AND ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        and %s, %s\n", REGA, REGT)
-		case AND_AX:
-			loadIndexed(REGT, REGX, "AND", "X")
-			fmt.Printf("        and %s, %s\n", REGA, REGT)
-		case AND_AY:
-			loadIndexed(REGT, REGY, "AND", "Y")
-			fmt.Printf("        and %s, %s\n", REGA, REGT)
-		case ORA:
-			immediate("ori", REGA, "ORA")
-		case ORA_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; ORA $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        or %s, %s\n", REGA, REGT)
-			accessMap[addr] = true
-		case ORA_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x             ; ORA ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        or %s, %s\n", REGA, REGT)
-		case ORA_AX:
-			loadIndexed(REGT, REGX, "ORA", "X")
-			fmt.Printf("        or %s, %s\n", REGA, REGT)
-		case ORA_AY:
-			loadIndexed(REGT, REGY, "ORA", "Y")
-			fmt.Printf("        or %s, %s\n", REGA, REGT)
-		case EOR:
-			value := nextByte()
-			fmt.Printf("ldi %s, 0x%02x                 ; EOR #$%02x\n", REGT, value, value)
-			fmt.Printf("        eor %s, %s\n", REGA, REGT)
-		case EOR_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; EOR $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        eor %s, %s\n", REGA, REGT)
-			accessMap[addr] = true
-		case EOR_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x             ; EOR ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        eor %s, %s\n", REGA, REGT)
-		case EOR_AX:
-			loadIndexed(REGT, REGX, "EOR", "X")
-			fmt.Printf("        eor %s, %s\n", REGA, REGT)
-		case EOR_AY:
-			loadIndexed(REGT, REGY, "EOR", "Y")
-			fmt.Printf("        eor %s, %s\n", REGA, REGT)
-		case CMP:
-			immediate("cpi", REGA, "CMP")
-			carryInverted = true
-		case CMP_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; CMP $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        cp %s, %s\n", REGA, REGT)
-			accessMap[addr] = true
-			carryInverted = true
-		case CMP_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x             ; CMP ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        cp %s, %s\n", REGA, REGT)
-			accessMap[addr] = true
-			carryInverted = true
-		case CMP_AX:
-			loadIndexed(REGT, REGX, "CMP", "X")
-			fmt.Printf("        cp %s, %s\n", REGA, REGT)
-			carryInverted = true
-		case CMP_AY:
-			loadIndexed(REGT, REGY, "CMP", "Y")
-			fmt.Printf("        cp %s, %s\n", REGA, REGT)
-			carryInverted = true
-		case CPX:
-			immediate("cpi", REGX, "CPX")
-			carryInverted = true
-		case CPX_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; CPX $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        cp %s, %s\n", REGX, REGT)
-			accessMap[addr] = true
-			carryInverted = true
-		case CPX_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x             ; CPX ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        cp %s, %s\n", REGX, REGT)
-			accessMap[addr] = true
-			carryInverted = true
-		case CPY:
-			immediate("cpi", REGY, "CPY")
-			carryInverted = true
-		case CPY_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; CPY $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        cp %s, %s\n", REGY, REGT)
-			accessMap[addr] = true
-			carryInverted = true
-		case CPY_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x             ; CPY ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        cp %s, %s\n", REGY, REGT)
-			accessMap[addr] = true
-			carryInverted = true
-		case BIT_A, BIT_Z:
-			// BIT sets the Z flag as though the value in the address tested were ANDed with the accumulator.
-			// The N and V flags are set to match bits 7 and 6 respectively in the value stored at the tested address.
-			if ins == BIT_A {
-				addr := nextWord()
-				fmt.Printf("lds %s, ram+0x%04x           ; BIT $%04x\n", REGT, addr-ramStart, addr)
-			} else {
-				addr := nextByte()
-				fmt.Printf("lds %s, zero+0x%02x           ; BIT ($%02x)\n", REGT, addr, addr)
-			}
-			fmt.Printf("        mov %s, %s\n", REGU, REGT)
-			fmt.Printf("        and %s, %s\n", REGU, REGA) // A and M -> Z
-			fmt.Printf("        cln\n")
-			fmt.Printf("        clv\n")
-			fmt.Printf("        sbrc %s, 7\n", REGT) // M bit 7 -> N
-			fmt.Printf("        sen\n")
-			fmt.Printf("        sbrc %s, 6\n", REGT) // M bit 6 -> V
-			fmt.Printf("        sev\n")
-		case BCS:
-			if carryInverted {
-				branch("brcc", "BCS")
-			} else {
-				branch("brcs", "BCS")
-			}
-		case BCC:
-			if carryInverted {
-				branch("brcs", "BCC")
-			} else {
-				branch("brcc", "BCC")
-			}
-		case BVS:
-			branch("brvs", "BVS")
-		case BVC:
-			branch("brvc", "BVC")
-		case BPL:
-			branch("brpl", "BPL")
-		case BMI:
-			branch("brmi", "BMI")
-		case BNE:
-			branch("brne", "BNE")
-		case BEQ:
-			branch("breq", "BEQ")
-		case LDA:
-			immediate("ldi", REGA, "LDA")
-			checkTest(REGA)
-		case LDA_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; LDA $%04x\n", REGA, addr-ramStart, addr)
-			checkTest(REGA)
-			accessMap[addr] = true
-		case LDA_AX:
-			loadIndexed(REGA, REGX, "LDA", "X")
-			checkTest(REGA)
-		case LDA_AY:
-			loadIndexed(REGA, REGY, "LDA", "Y")
-			checkTest(REGA)
-		case LDA_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x           ; LDA ($%02x)\n", REGA, addr, addr)
-			checkTest(REGA)
-			accessMap[addr] = true
-		case LDX:
-			immediate("ldi", REGX, "LDX")
-			checkTest(REGX)
-		case LDX_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; LDX $%04x\n", REGX, addr-ramStart, addr)
-			checkTest(REGX)
-			accessMap[addr] = true
-		case LDX_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x           ; LDX ($%02x)\n", REGX, addr, addr)
-			checkTest(REGX)
-			accessMap[addr] = true
-		case LDY:
-			immediate("ldi", REGY, "LDY")
-			checkTest(REGY)
-		case LDY_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; LDY $%04x\n", REGY, addr-ramStart, addr)
-			checkTest(REGY)
-			accessMap[addr] = true
-		case LDY_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x           ; LDY ($%02x)\n", REGY, addr, addr)
-			checkTest(REGY)
-			accessMap[addr] = true
-		case LDY_AX:
-			loadIndexed(REGY, REGX, "LDY", "X")
-			checkTest(REGY)
-		case INC_AX:
-			loadIndexed(REGT, REGX, "INC", "X")
-			fmt.Printf("        inc %s\n", REGT)
-			fmt.Printf("        st X, %s\n", REGT)
-		case INC_A:
-			absoluteUpdate("inc", "INC")
-		case INC_Z:
-			zeroPageUpdate("inc", "INC")
-		case DEC_Z:
-			zeroPageUpdate("dec", "DEC")
-		case DEC_AX:
-			loadIndexed(REGT, REGX, "DEC", "X")
-			fmt.Printf("        dec %s\n", REGT)
-			fmt.Printf("        st X, %s\n", REGT)
-		case LDA_IY:
-			addr := nextByte()
-			fmt.Printf("lds r26,zero+0x%02x             ; LDA ($%02x),Y\n", addr, addr)
-			fmt.Printf("        lds r27,zero+0x%02x+1\n", addr)
-			fmt.Printf("        in %s, 0x3f\n", REGS)
-			fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
-			fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
-			fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
-			fmt.Printf("        sbci r27,hi8(-(ram))\n")
-			fmt.Printf("        add r26,%s\n", REGY) // add Y index
-			fmt.Printf("        adc r27,%s\n", REGZ)
-			fmt.Printf("        out 0x3f, %s\n", REGS)
-			fmt.Printf("        ld %s, X\n", REGA)
-			checkTest(REGA)
-			accessMap[addr] = true
-			accessMap[addr+1] = true
-		case STA_AX:
-			storeIndexed(REGA, REGX, "STA", "X")
-		case STA_AY:
-			storeIndexed(REGA, REGY, "STA", "Y")
-		case ADC:
-			value := nextByte()
-			fmt.Printf("ldi %s, 0x%02x                 ; ADC #$%02x\n", REGT, value, value)
-			fmt.Printf("        adc %s, %s\n", REGA, REGT)
-			carryInverted = false
-		case ADC_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; ADC $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        adc %s, %s\n", REGA, REGT)
-			accessMap[addr] = true
-			carryInverted = false
-		case ADC_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x             ; ADC ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        adc %s, %s\n", REGA, REGT)
-			accessMap[addr] = true
-			carryInverted = false
-		case ADC_AX:
-			loadIndexed(REGT, REGX, "ADC", "X")
-			fmt.Printf("        adc %s, %s\n", REGA, REGT)
-			carryInverted = false
-		case ADC_AY:
-			loadIndexed(REGT, REGY, "ADC", "Y")
-			fmt.Printf("        adc %s, %s\n", REGA, REGT)
-			carryInverted = false
-		case SBC:
-			value := nextByte()
-			fmt.Printf("sbci %s, 0x%02x                ; SBC #$%02x\n", REGA, value, value)
-			carryInverted = true
-		case SBC_Z:
-			addr := nextByte()
-			fmt.Printf("lds %s, zero+0x%02x             ; SBC ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        sbci %s, %s\n", REGA, REGT)
-		case SBC_A:
-			addr := nextWord()
-			fmt.Printf("lds %s, ram+0x%04x           ; SBC $%04x\n", REGT, addr-ramStart, addr)
-			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
-			accessMap[addr] = true
-			carryInverted = true
-		case SBC_AX:
-			loadIndexed(REGT, REGX, "SBC", "X")
-			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
-			carryInverted = true
-		case SBC_AY:
-			loadIndexed(REGT, REGY, "SBC", "Y")
-			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
-			carryInverted = true
-		case ROR:
-			fmt.Printf("        ror %s\n", REGA)
-		case ROR_Z:
-			zeroPageUpdate("ror", "ROR")
-		case ROR_A:
-			absoluteUpdate("ror", "ROR")
-		case DEC_A:
-			if motr && pc-1 == 0x83b6 {
-				addr := nextWord()
-				// DEC at $83b6 is known to be updated to INC / DEC instructions - we will store this value at zero[0]
-				fmt.Printf("lds %s, ram+0x%04x           ; DEC $%04x (SELF MODIFYING)\n", REGT, addr-ramStart, addr)
-				fmt.Printf("        lds %s, zero+0x%02x\n", REGU, 0)
-				fmt.Printf("        cpi %s, 0x%02x\n", REGU, DEC_A)
-				fmt.Printf("        breq 1f\n")
-				fmt.Printf("        inc %s\n", REGT)
-				fmt.Printf("        sbrc %s, 0\n", REGZ)
-				fmt.Printf("1:      dec %s\n", REGT)
-				fmt.Printf("        sts ram+0x%04x, %s\n", addr-ramStart, REGT)
-				accessMap[addr] = true
-			} else {
-				absoluteUpdate("dec", "DEC")
-			}
-		case ASL:
-			fmt.Printf("lsl %s                       ; ASL\n", REGA)
-		case ASL_Z:
-			zeroPageUpdate("lsl", "ASL")
-		case LSR:
-			fmt.Printf("lsr %s                       ; LSR\n", REGA)
-		case LSR_A:
-			absoluteUpdate("lsr", "LSR")
-		case LSR_Z:
-			zeroPageUpdate("lsr", "LSR")
 		case TAX:
 			fmt.Printf("mov %s, %s                  ; TAX\n", REGX, REGA)
 			checkTest(REGX)
@@ -625,41 +660,6 @@ func transcode(address uint16, stop uint16) {
 		case TYA:
 			fmt.Printf("mov %s, %s                  ; TYA\n", REGA, REGY)
 			checkTest(REGA)
-		case CLC:
-			fmt.Printf("clc                           ; CLC\n")
-			carryInverted = false
-		case SEC:
-			fmt.Printf("sec                           ; SEC\n")
-			carryInverted = false
-		case CLV:
-			fmt.Printf("clv                           ; CLV\n")
-		case INX:
-			fmt.Printf("inc %s                       ; INX\n", REGX)
-		case DEX:
-			fmt.Printf("dec %s                       ; DEX\n", REGX)
-		case INY:
-			fmt.Printf("inc %s                       ; INY\n", REGY)
-		case DEY:
-			fmt.Printf("dec %s                       ; DEY\n", REGY)
-		case RTI:
-			fmt.Printf("ret                           ; RTI\n") // assume ISR has been wrapped by JSR
-		case RTS:
-			fmt.Printf("ret                           ; RTS\n")
-		case PHA:
-			fmt.Printf("push %s                      ; PHA\n", REGA)
-		case PLA:
-			fmt.Printf("pop %s                       ; PLA\n", REGA)
-			checkTest(REGA)
-		case PHP:
-			fmt.Printf("in %s, 0x3f                  ; PHP\n", REGS)
-			fmt.Printf("        push %s\n", REGS)
-		case PLP:
-			fmt.Printf("pop %s                       ; PLP\n", REGS)
-			fmt.Printf("        out 0x3f, %s\n", REGS)
-		case NOP, BRK, SEI, CLI:
-			// 6502 NOPs were either for padding or timing, neither of which apply here
-			fmt.Printf("                              ; %s\n", opcode.ins)
-			voidMap[pc-1] = true
 		default:
 			log.Fatalf("UNMAPPED OPCODE at %04x: %v\n", pc-1, opcode)
 		}
