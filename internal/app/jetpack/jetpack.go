@@ -273,12 +273,20 @@ func transcode(address uint16, stop uint16) {
 			loadIndexed(REGT, REGY, "ADC", "Y")
 			fmt.Printf("        adc %s, %s\n", REGA, REGT)
 			carryInverted = false
+		case ADC_IY:
+			loadZeroIndirectY(REGT, "ADC")
+			fmt.Printf("        adc %s, %s\n", REGA, REGT)
+			carryInverted = false
 		case ADC_Z:
 			addr := nextByte()
 			fmt.Printf("lds %s, zero+0x%02x             ; ADC ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        adc %s, %s\n", REGA, REGT)
 			accessMap[addr] = true
 			carryInverted = false
+		case ADC_ZX:
+			loadZeroIndexed(REGT, REGX, "ADC", "X")
+			fmt.Printf("        adc %s, %s\n", REGA, REGT)
+			checkTest(REGA)
 		case AND:
 			immediate("andi", REGA, "AND")
 		case AND_A:
@@ -292,14 +300,30 @@ func transcode(address uint16, stop uint16) {
 		case AND_AY:
 			loadIndexed(REGT, REGY, "AND", "Y")
 			fmt.Printf("        and %s, %s\n", REGA, REGT)
+		case AND_IY:
+			loadZeroIndirectY(REGT, "AND")
+			fmt.Printf("        and %s, %s\n", REGA, REGT)
 		case AND_Z:
 			addr := nextByte()
 			fmt.Printf("lds %s, zero+0x%02x             ; AND ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        and %s, %s\n", REGA, REGT)
+		case AND_ZX:
+			loadZeroIndexed(REGT, REGX, "AND", "X")
+			fmt.Printf("        and %s, %s\n", REGA, REGT)
+			checkTest(REGA)
 		case ASL:
 			fmt.Printf("lsl %s                       ; ASL\n", REGA)
+		case ASL_A:
+			absoluteUpdate("lsl", "ASL")
+		case ASL_AX:
+			loadIndexed(REGT, REGX, "ASL", "X")
+			fmt.Printf("        lsl %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
 		case ASL_Z:
 			zeroPageUpdate("lsl", "ASL")
+		case ASL_ZX:
+			loadZeroIndexed(REGT, REGX, "ASL", "X")
+			fmt.Printf("        lsl %s, %s\n", REGA, REGT)
 		case BCC:
 			if carryInverted {
 				branch("brcs", "BCC")
@@ -364,11 +388,19 @@ func transcode(address uint16, stop uint16) {
 			loadIndexed(REGT, REGY, "CMP", "Y")
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
 			carryInverted = true
+		case CMP_IY:
+			loadZeroIndirectY(REGT, "CMP")
+			fmt.Printf("        cp %s, %s\n", REGA, REGT)
+			carryInverted = false
 		case CMP_Z:
 			addr := nextByte()
 			fmt.Printf("lds %s, zero+0x%02x             ; CMP ($%02x)\n", REGT, addr, addr)
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
 			accessMap[addr] = true
+			carryInverted = true
+		case CMP_ZX:
+			loadZeroIndexed(REGT, REGX, "CMP", "X")
+			fmt.Printf("        cp %s, %s\n", REGA, REGT)
 			carryInverted = true
 		case CPX:
 			immediate("cpi", REGX, "CPX")
@@ -422,6 +454,10 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        st X, %s\n", REGT)
 		case DEC_Z:
 			zeroPageUpdate("dec", "DEC")
+		case DEC_ZX:
+			loadZeroIndexed(REGT, REGX, "DEC", "X")
+			fmt.Printf("        dec %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
 		case DEX:
 			fmt.Printf("dec %s                       ; DEX\n", REGX)
 		case DEY:
@@ -441,9 +477,15 @@ func transcode(address uint16, stop uint16) {
 		case EOR_AY:
 			loadIndexed(REGT, REGY, "EOR", "Y")
 			fmt.Printf("        eor %s, %s\n", REGA, REGT)
+		case EOR_IY:
+			loadZeroIndirectY(REGT, "EOR")
+			fmt.Printf("        eor %s, %s\n", REGA, REGT)
 		case EOR_Z:
 			addr := nextByte()
 			fmt.Printf("lds %s, zero+0x%02x             ; EOR ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        eor %s, %s\n", REGA, REGT)
+		case EOR_ZX:
+			loadZeroIndexed(REGT, REGX, "EOR", "X")
 			fmt.Printf("        eor %s, %s\n", REGA, REGT)
 		case INC_A:
 			absoluteUpdate("inc", "INC")
@@ -453,6 +495,10 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        st X, %s\n", REGT)
 		case INC_Z:
 			zeroPageUpdate("inc", "INC")
+		case INC_ZX:
+			loadZeroIndexed(REGT, REGX, "INC", "X")
+			fmt.Printf("        inc %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
 		case INX:
 			fmt.Printf("inc %s                       ; INX\n", REGX)
 		case INY:
@@ -478,26 +524,16 @@ func transcode(address uint16, stop uint16) {
 			loadIndexed(REGA, REGY, "LDA", "Y")
 			checkTest(REGA)
 		case LDA_IY:
-			addr := nextByte()
-			fmt.Printf("lds r26,zero+0x%02x             ; LDA ($%02x),Y\n", addr, addr)
-			fmt.Printf("        lds r27,zero+0x%02x+1\n", addr)
-			fmt.Printf("        in %s, 0x3f\n", REGS)
-			fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
-			fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
-			fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
-			fmt.Printf("        sbci r27,hi8(-(ram))\n")
-			fmt.Printf("        add r26,%s\n", REGY) // add Y index
-			fmt.Printf("        adc r27,%s\n", REGZ)
-			fmt.Printf("        out 0x3f, %s\n", REGS)
-			fmt.Printf("        ld %s, X\n", REGA)
+			loadZeroIndirectY(REGA, "LDA")
 			checkTest(REGA)
-			accessMap[addr] = true
-			accessMap[addr+1] = true
 		case LDA_Z:
 			addr := nextByte()
 			fmt.Printf("lds %s, zero+0x%02x           ; LDA ($%02x)\n", REGA, addr, addr)
 			checkTest(REGA)
 			accessMap[addr] = true
+		case LDA_ZX:
+			loadZeroIndexed(REGA, REGX, "LDA", "X")
+			checkTest(REGA)
 		case LDX:
 			immediate("ldi", REGX, "LDX")
 			checkTest(REGX)
@@ -506,11 +542,16 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("lds %s, ram+0x%04x           ; LDX $%04x\n", REGX, addr-ramStart, addr)
 			checkTest(REGX)
 			accessMap[addr] = true
+		case LDX_AY:
+			loadIndexed(REGX, REGY, "LDX", "Y")
+			checkTest(REGX)
 		case LDX_Z:
 			addr := nextByte()
 			fmt.Printf("lds %s, zero+0x%02x           ; LDX ($%02x)\n", REGX, addr, addr)
 			checkTest(REGX)
 			accessMap[addr] = true
+		case LDX_ZY:
+			loadZeroIndexed(REGX, REGY, "LDX", "Y")
 		case LDY:
 			immediate("ldi", REGY, "LDY")
 			checkTest(REGY)
@@ -527,12 +568,21 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("lds %s, zero+0x%02x           ; LDY ($%02x)\n", REGY, addr, addr)
 			checkTest(REGY)
 			accessMap[addr] = true
+		case LDY_ZX:
+			loadZeroIndexed(REGY, REGX, "LDY", "X")
 		case LSR:
 			fmt.Printf("lsr %s                       ; LSR\n", REGA)
 		case LSR_A:
 			absoluteUpdate("lsr", "LSR")
+		case LSR_AX:
+			loadIndexed(REGT, REGX, "LSR", "X")
+			fmt.Printf("        lsr %s, %s\n", REGA, REGT)
 		case LSR_Z:
 			zeroPageUpdate("lsr", "LSR")
+		case LSR_ZX:
+			loadZeroIndexed(REGT, REGX, "LSR", "X")
+			fmt.Printf("        lsr %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
 		case NOP, BRK, SEI, CLI:
 			// 6502 NOPs were either for padding or timing, neither of which apply here
 			fmt.Printf("                              ; %s\n", opcode.ins)
@@ -550,9 +600,15 @@ func transcode(address uint16, stop uint16) {
 		case ORA_AY:
 			loadIndexed(REGT, REGY, "ORA", "Y")
 			fmt.Printf("        or %s, %s\n", REGA, REGT)
+		case ORA_IY:
+			loadZeroIndirectY(REGT, "ORA")
+			fmt.Printf("        or %s, %s\n", REGA, REGT)
 		case ORA_Z:
 			addr := nextByte()
 			fmt.Printf("lds %s, zero+0x%02x             ; ORA ($%02x)\n", REGT, addr, addr)
+			fmt.Printf("        or %s, %s\n", REGA, REGT)
+		case ORA_ZX:
+			loadZeroIndexed(REGT, REGX, "ORA", "X")
 			fmt.Printf("        or %s, %s\n", REGA, REGT)
 		case PHA:
 			fmt.Printf("push %s                      ; PHA\n", REGA)
@@ -565,12 +621,34 @@ func transcode(address uint16, stop uint16) {
 		case PLP:
 			fmt.Printf("pop %s                       ; PLP\n", REGS)
 			fmt.Printf("        out 0x3f, %s\n", REGS)
+		case ROL:
+			fmt.Printf("rol %s                       ; ROL\n", REGA)
+		case ROL_A:
+			absoluteUpdate("rol", "ROL")
+		case ROL_AX:
+			loadIndexed(REGT, REGX, "ROL", "X")
+			fmt.Printf("        rol %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
+		case ROL_Z:
+			zeroPageUpdate("rol", "ROL")
+		case ROL_ZX:
+			loadZeroIndexed(REGT, REGX, "ROL", "X")
+			fmt.Printf("        rol %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
 		case ROR:
-			fmt.Printf("        ror %s\n", REGA)
+			fmt.Printf("ror %s                       ; ROR\n", REGA)
 		case ROR_A:
 			absoluteUpdate("ror", "ROR")
+		case ROR_AX:
+			loadIndexed(REGT, REGX, "ROR", "X")
+			fmt.Printf("        ror %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
 		case ROR_Z:
 			zeroPageUpdate("ror", "ROR")
+		case ROR_ZX:
+			loadZeroIndexed(REGT, REGX, "ROR", "X")
+			fmt.Printf("        ror %s\n", REGT)
+			fmt.Printf("        st X, %s\n", REGT)
 		case RTI:
 			fmt.Printf("ret                           ; RTI\n") // assume ISR has been wrapped by JSR
 		case RTS:
@@ -593,10 +671,17 @@ func transcode(address uint16, stop uint16) {
 			loadIndexed(REGT, REGY, "SBC", "Y")
 			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
 			carryInverted = true
+		case SBC_IY:
+			loadZeroIndirectY(REGT, "SBC")
+			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
+			carryInverted = true
 		case SBC_Z:
 			addr := nextByte()
 			fmt.Printf("lds %s, zero+0x%02x             ; SBC ($%02x)\n", REGT, addr, addr)
-			fmt.Printf("        sbci %s, %s\n", REGA, REGT)
+			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
+		case SBC_ZX:
+			loadZeroIndexed(REGT, REGX, "SBC", "X")
+			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
 		case SEC:
 			fmt.Printf("sec                           ; SEC\n")
 			carryInverted = false
@@ -615,10 +700,14 @@ func transcode(address uint16, stop uint16) {
 			storeIndexed(REGA, REGX, "STA", "X")
 		case STA_AY:
 			storeIndexed(REGA, REGY, "STA", "Y")
+		case STA_IY:
+			storeZeroIndirectY(REGA, "STA")
 		case STA_Z:
 			addr := nextByte()
 			fmt.Printf("sts zero+0x%02x, %s            ; STA $%02x\n", addr, REGA, addr)
 			accessMap[addr] = true
+		case STA_ZX:
+			storeZeroIndexed(REGA, REGX, "STA", "X")
 		case STX_A:
 			addr := nextWord()
 			if addr&0xff00 == 0xd400 {
@@ -634,6 +723,8 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("sts zero+0x%02x, %s            ; STX $%02x\n", addr, REGX, addr)
 			accessMap[addr] = true
+		case STX_ZY:
+			storeZeroIndexed(REGX, REGY, "STX", "Y")
 		case STY_A:
 			addr := nextWord()
 			if motr && addr == 0x83b6 {
@@ -648,6 +739,8 @@ func transcode(address uint16, stop uint16) {
 			addr := nextByte()
 			fmt.Printf("sts zero+0x%02x, %s            ; STY $%02x\n", addr, REGY, addr)
 			accessMap[addr] = true
+		case STY_ZX:
+			storeZeroIndexed(REGY, REGX, "STY", "X")
 		case TAX:
 			fmt.Printf("mov %s, %s                  ; TAX\n", REGX, REGA)
 			checkTest(REGX)
@@ -717,6 +810,68 @@ func storeIndexed(reg string, indexReg string, ins string, insIndex string) {
 	fmt.Printf("        out 0x3f, %s\n", REGS)
 	fmt.Printf("        st X, %s\n", reg)
 	accessMap[addr] = true
+}
+
+func loadZeroIndexed(reg string, indexReg string, ins string, insIndex string) {
+	addr := nextByte()
+	fmt.Printf("ldi r26,lo8(zero)             ; %s $%02x,%s\n", ins, addr, insIndex)
+	fmt.Printf("        ldi r27,hi8(zero)\n")
+	fmt.Printf("        in %s, 0x3f\n", REGS)
+	fmt.Printf("        ldi %s, 0x%02x\n", REGT, addr)
+	fmt.Printf("        add %s, %s\n", REGT, indexReg) // index add with wrap
+	fmt.Printf("        add r26,%s\n", REGT)
+	fmt.Printf("        adc r27,%s\n", REGZ)
+	fmt.Printf("        out 0x3f, %s\n", REGS)
+	fmt.Printf("        ld %s, X\n", reg)
+	accessMap[addr] = true
+}
+
+func storeZeroIndexed(reg string, indexReg string, ins string, insIndex string) {
+	addr := nextByte()
+	fmt.Printf("ldi r26,lo8(zero)             ; %s $%02x,%s\n", ins, addr, insIndex)
+	fmt.Printf("        ldi r27,hi8(zero)\n")
+	fmt.Printf("        in %s, 0x3f\n", REGS)
+	fmt.Printf("        ldi %s, 0x%02x\n", REGT, addr)
+	fmt.Printf("        add %s, %s\n", REGT, indexReg) // index add with wrap
+	fmt.Printf("        add r26,%s\n", REGT)
+	fmt.Printf("        adc r27,%s\n", REGZ)
+	fmt.Printf("        out 0x3f, %s\n", REGS)
+	fmt.Printf("        st X, %s\n", reg)
+	accessMap[addr] = true
+}
+
+func loadZeroIndirectY(reg string, ins string) {
+	addr := nextByte()
+	fmt.Printf("lds r26,zero+0x%02x             ; %s ($%02x),Y\n", addr, ins, addr)
+	fmt.Printf("        lds r27,zero+0x%02x+1\n", addr)
+	fmt.Printf("        in %s, 0x3f\n", REGS)
+	fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
+	fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
+	fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
+	fmt.Printf("        sbci r27,hi8(-(ram))\n")
+	fmt.Printf("        add r26,%s\n", REGY) // add Y index
+	fmt.Printf("        adc r27,%s\n", REGZ)
+	fmt.Printf("        out 0x3f, %s\n", REGS)
+	fmt.Printf("        ld %s, X\n", reg)
+	accessMap[addr] = true
+	accessMap[addr+1] = true
+}
+
+func storeZeroIndirectY(reg string, ins string) {
+	addr := nextByte()
+	fmt.Printf("lds r26,zero+0x%02x             ; %s ($%02x),Y\n", addr, ins, addr)
+	fmt.Printf("        lds r27,zero+0x%02x+1\n", addr)
+	fmt.Printf("        in %s, 0x3f\n", REGS)
+	fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
+	fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
+	fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
+	fmt.Printf("        sbci r27,hi8(-(ram))\n")
+	fmt.Printf("        add r26,%s\n", REGY) // add Y index
+	fmt.Printf("        adc r27,%s\n", REGZ)
+	fmt.Printf("        out 0x3f, %s\n", REGS)
+	fmt.Printf("        st X, %s\n", reg)
+	accessMap[addr] = true
+	accessMap[addr+1] = true
 }
 
 func absoluteUpdate(asm string, code string) {
