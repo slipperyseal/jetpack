@@ -710,12 +710,13 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("sec                           ; SEC\n")
 			carryInverted = false
 		case STA_A:
-			addr := nextWord()
-			if addr&0xff00 == 0xd400 {
+			if byteAt(pc+1) == 0xd4 {
+				addr := nextWord()
 				fmt.Printf("mov %s, %s                  ; STA $%04x (SID)\n", REGT, REGA, addr)
 				fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr&0xff)
 				fmt.Printf("        rcall sid_write\n")
 			} else {
+				addr := nextWord()
 				fmt.Printf("sts ram+0x%04x, %s           ; STA $%04x\n", addr-ramStart, REGA, addr)
 				checkSelfMod(addr)
 				accessMap[addr] = true
@@ -735,12 +736,13 @@ func transcode(address uint16, stop uint16) {
 		case STA_ZX:
 			storeZeroIndexed(REGA, REGX, "STA", "X")
 		case STX_A:
-			addr := nextWord()
-			if addr&0xff00 == 0xd400 {
+			if byteAt(pc+1) == 0xd4 {
+				addr := nextWord()
 				fmt.Printf("mov %s, %s                  ; STX $%04x (SID)\n", REGT, REGX, addr)
 				fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr&0xff)
 				fmt.Printf("        rcall sid_write\n")
 			} else {
+				addr := nextWord()
 				fmt.Printf("sts ram+0x%04x, %s           ; STX $%04x\n", addr-ramStart, REGX, addr)
 				checkSelfMod(addr)
 				accessMap[addr] = true
@@ -822,7 +824,7 @@ func loadIndexed(reg string, indexReg string, ins string, insIndex string) {
 }
 
 func storeIndexed(reg string, indexReg string, ins string, insIndex string) {
-	if wordAt(pc)&0xff00 == 0xd400 {
+	if byteAt(pc+1) == 0xd4 {
 		addr := nextWord()
 		fmt.Printf("mov %s, %s                  ; %s $%04x,%s (SID)\n", REGT, reg, ins, addr, insIndex)
 		fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr&0xff)
@@ -868,10 +870,8 @@ func zeroIndirectX(ins string) {
 	fmt.Printf("        adc r27,%s\n", REGZ)
 	fmt.Printf("        add r26,%s\n", REGX) // add X index
 	fmt.Printf("        adc r27,%s\n", REGZ)
-	fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
-	fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
-	fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
-	fmt.Printf("        sbci r27,hi8(-(ram))\n")
+	fmt.Printf("        subi r26,lo8(-(ram-0x%04x))\n", ramStart) // add ram offset
+	fmt.Printf("        sbci r27,hi8(-(ram-0x%04x))\n", ramStart)
 	fmt.Printf("        out 0x3f, %s\n", REGS)
 	accessMap[addr] = true
 	accessMap[addr+1] = true
@@ -892,10 +892,8 @@ func zeroIndirectY(ins string) {
 	fmt.Printf("lds r26,zero+0x%02x             ; %s ($%02x),Y\n", addr, ins, addr)
 	fmt.Printf("        lds r27,zero+0x%02x+1\n", addr)
 	fmt.Printf("        in %s, 0x3f\n", REGS)
-	fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
-	fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
-	fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
-	fmt.Printf("        sbci r27,hi8(-(ram))\n")
+	fmt.Printf("        subi r26,lo8(-(ram-0x%04x))\n", ramStart) // add ram offset
+	fmt.Printf("        sbci r27,hi8(-(ram-0x%04x))\n", ramStart)
 	fmt.Printf("        add r26,%s\n", REGY) // add Y index
 	fmt.Printf("        adc r27,%s\n", REGZ)
 	fmt.Printf("        out 0x3f, %s\n", REGS)
