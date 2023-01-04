@@ -273,6 +273,10 @@ func transcode(address uint16, stop uint16) {
 			loadIndexed(REGT, REGY, "ADC", "Y")
 			fmt.Printf("        adc %s, %s\n", REGA, REGT)
 			carryInverted = false
+		case ADC_IX:
+			loadZeroIndirectX(REGT, "ADC")
+			fmt.Printf("        adc %s, %s\n", REGA, REGT)
+			carryInverted = false
 		case ADC_IY:
 			loadZeroIndirectY(REGT, "ADC")
 			fmt.Printf("        adc %s, %s\n", REGA, REGT)
@@ -299,6 +303,9 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("        and %s, %s\n", REGA, REGT)
 		case AND_AY:
 			loadIndexed(REGT, REGY, "AND", "Y")
+			fmt.Printf("        and %s, %s\n", REGA, REGT)
+		case AND_IX:
+			loadZeroIndirectX(REGT, "AND")
 			fmt.Printf("        and %s, %s\n", REGA, REGT)
 		case AND_IY:
 			loadZeroIndirectY(REGT, "AND")
@@ -388,6 +395,10 @@ func transcode(address uint16, stop uint16) {
 			loadIndexed(REGT, REGY, "CMP", "Y")
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
 			carryInverted = true
+		case CMP_IX:
+			loadZeroIndirectX(REGT, "CMP")
+			fmt.Printf("        cp %s, %s\n", REGA, REGT)
+			carryInverted = false
 		case CMP_IY:
 			loadZeroIndirectY(REGT, "CMP")
 			fmt.Printf("        cp %s, %s\n", REGA, REGT)
@@ -477,6 +488,9 @@ func transcode(address uint16, stop uint16) {
 		case EOR_AY:
 			loadIndexed(REGT, REGY, "EOR", "Y")
 			fmt.Printf("        eor %s, %s\n", REGA, REGT)
+		case EOR_IX:
+			loadZeroIndirectX(REGT, "EOR")
+			fmt.Printf("        eor %s, %s\n", REGA, REGT)
 		case EOR_IY:
 			loadZeroIndirectY(REGT, "EOR")
 			fmt.Printf("        eor %s, %s\n", REGA, REGT)
@@ -522,6 +536,9 @@ func transcode(address uint16, stop uint16) {
 			checkTest(REGA)
 		case LDA_AY:
 			loadIndexed(REGA, REGY, "LDA", "Y")
+			checkTest(REGA)
+		case LDA_IX:
+			loadZeroIndirectX(REGA, "LDA")
 			checkTest(REGA)
 		case LDA_IY:
 			loadZeroIndirectY(REGA, "LDA")
@@ -600,6 +617,9 @@ func transcode(address uint16, stop uint16) {
 		case ORA_AY:
 			loadIndexed(REGT, REGY, "ORA", "Y")
 			fmt.Printf("        or %s, %s\n", REGA, REGT)
+		case ORA_IX:
+			loadZeroIndirectX(REGT, "ORA")
+			fmt.Printf("        or %s, %s\n", REGA, REGT)
 		case ORA_IY:
 			loadZeroIndirectY(REGT, "ORA")
 			fmt.Printf("        or %s, %s\n", REGA, REGT)
@@ -671,6 +691,10 @@ func transcode(address uint16, stop uint16) {
 			loadIndexed(REGT, REGY, "SBC", "Y")
 			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
 			carryInverted = true
+		case SBC_IX:
+			loadZeroIndirectX(REGT, "SBC")
+			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
+			carryInverted = true
 		case SBC_IY:
 			loadZeroIndirectY(REGT, "SBC")
 			fmt.Printf("        sbc %s, %s\n", REGA, REGT)
@@ -700,6 +724,8 @@ func transcode(address uint16, stop uint16) {
 			storeIndexed(REGA, REGX, "STA", "X")
 		case STA_AY:
 			storeIndexed(REGA, REGY, "STA", "Y")
+		case STA_IX:
+			storeZeroIndirectX(REGA, "STA")
 		case STA_IY:
 			storeZeroIndirectY(REGA, "STA")
 		case STA_Z:
@@ -779,7 +805,7 @@ func branch(branchIns string, ins string) {
 	}
 }
 
-func loadIndexed(reg string, indexReg string, ins string, insIndex string) {
+func indexed(indexReg string, ins string, insIndex string) {
 	addr := nextWord()
 	fmt.Printf("ldi r26,lo8(ram+0x%04x)       ; %s $%04x,%s\n", addr-ramStart, ins, addr, insIndex)
 	fmt.Printf("        ldi r27,hi8(ram+0x%04x)\n", addr-ramStart)
@@ -787,14 +813,18 @@ func loadIndexed(reg string, indexReg string, ins string, insIndex string) {
 	fmt.Printf("        add r26,%s\n", indexReg)
 	fmt.Printf("        adc r27,%s\n", REGZ)
 	fmt.Printf("        out 0x3f, %s\n", REGS)
-	fmt.Printf("        ld %s, X\n", reg)
 	accessMap[addr] = true
 }
 
+func loadIndexed(reg string, indexReg string, ins string, insIndex string) {
+	indexed(indexReg, ins, insIndex)
+	fmt.Printf("        ld %s, X\n", reg)
+}
+
 func storeIndexed(reg string, indexReg string, ins string, insIndex string) {
-	addr := nextWord()
-	if addr&0xff00 == 0xd400 {
-		fmt.Printf("mov %s, %s                  ; %s $%04x,%s (SID)\n", REGT, REGA, ins, addr, insIndex)
+	if wordAt(pc)&0xff00 == 0xd400 {
+		addr := nextWord()
+		fmt.Printf("mov %s, %s                  ; %s $%04x,%s (SID)\n", REGT, reg, ins, addr, insIndex)
 		fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr&0xff)
 		fmt.Printf("        in %s, 0x3f\n", REGS)
 		fmt.Printf("        add %s, %s\n", REGU, indexReg)
@@ -802,76 +832,85 @@ func storeIndexed(reg string, indexReg string, ins string, insIndex string) {
 		fmt.Printf("        rcall sid_write\n")
 		return
 	}
-	fmt.Printf("ldi r26,lo8(ram+0x%04x)       ; %s $%04x,%s\n", addr-ramStart, ins, addr, insIndex)
-	fmt.Printf("        ldi r27,hi8(ram+0x%04x)\n", addr-ramStart)
+	indexed(indexReg, ins, insIndex)
+	fmt.Printf("        st X, %s\n", reg)
+}
+
+func zeroIndexed(indexReg string, ins string, insIndex string) {
+	addr := nextByte()
+	fmt.Printf("ldi r26,lo8(zero+0x%02x)        ; %s $%02x,%s\n", addr, ins, addr, insIndex)
+	fmt.Printf("        ldi r27,hi8(zero+0x%02x)\n", addr)
 	fmt.Printf("        in %s, 0x3f\n", REGS)
 	fmt.Printf("        add r26,%s\n", indexReg)
 	fmt.Printf("        adc r27,%s\n", REGZ)
 	fmt.Printf("        out 0x3f, %s\n", REGS)
-	fmt.Printf("        st X, %s\n", reg)
-	accessMap[addr] = true
-}
-
-func loadZeroIndexed(reg string, indexReg string, ins string, insIndex string) {
-	addr := nextByte()
-	fmt.Printf("ldi r26,lo8(zero)             ; %s $%02x,%s\n", ins, addr, insIndex)
-	fmt.Printf("        ldi r27,hi8(zero)\n")
-	fmt.Printf("        in %s, 0x3f\n", REGS)
-	fmt.Printf("        ldi %s, 0x%02x\n", REGT, addr)
-	fmt.Printf("        add %s, %s\n", REGT, indexReg) // index add with wrap
-	fmt.Printf("        add r26,%s\n", REGT)
-	fmt.Printf("        adc r27,%s\n", REGZ)
-	fmt.Printf("        out 0x3f, %s\n", REGS)
-	fmt.Printf("        ld %s, X\n", reg)
 	accessMap[addr] = true
 }
 
 func storeZeroIndexed(reg string, indexReg string, ins string, insIndex string) {
+	zeroIndexed(indexReg, ins, indexReg)
+	fmt.Printf("        st X, %s\n", reg)
+}
+
+func loadZeroIndexed(reg string, indexReg string, ins string, insIndex string) {
+	zeroIndexed(indexReg, ins, indexReg)
+	fmt.Printf("        ld %s, X\n", reg)
+}
+
+// this is not correct - required indirect read
+func zeroIndirectX(ins string) {
 	addr := nextByte()
-	fmt.Printf("ldi r26,lo8(zero)             ; %s $%02x,%s\n", ins, addr, insIndex)
+	fmt.Printf("ldi r26,lo8(zero)             ; %s ($%02x,X)\n", ins, addr)
 	fmt.Printf("        ldi r27,hi8(zero)\n")
 	fmt.Printf("        in %s, 0x3f\n", REGS)
-	fmt.Printf("        ldi %s, 0x%02x\n", REGT, addr)
-	fmt.Printf("        add %s, %s\n", REGT, indexReg) // index add with wrap
-	fmt.Printf("        add r26,%s\n", REGT)
+	fmt.Printf("        ldi %s, 0x%02\n", REGU, addr)
+	fmt.Printf("        add r26,%s\n", REGU) // add addr to zero page
+	fmt.Printf("        adc r27,%s\n", REGZ)
+	fmt.Printf("        add r26,%s\n", REGX) // add X index
+	fmt.Printf("        adc r27,%s\n", REGZ)
+	fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
+	fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
+	fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
+	fmt.Printf("        sbci r27,hi8(-(ram))\n")
+	fmt.Printf("        out 0x3f, %s\n", REGS)
+	accessMap[addr] = true
+	accessMap[addr+1] = true
+}
+
+func loadZeroIndirectX(reg string, ins string) {
+	zeroIndirectX(ins)
+	fmt.Printf("        ld %s, X\n", reg)
+}
+
+func storeZeroIndirectX(reg string, ins string) {
+	zeroIndirectX(ins)
+	fmt.Printf("        st X, %s\n", reg)
+}
+
+func zeroIndirectY(ins string) {
+	addr := nextByte()
+	fmt.Printf("lds r26,zero+0x%02x             ; %s ($%02x),Y\n", addr, ins, addr)
+	fmt.Printf("        lds r27,zero+0x%02x+1\n", addr)
+	fmt.Printf("        in %s, 0x3f\n", REGS)
+	fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
+	fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
+	fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
+	fmt.Printf("        sbci r27,hi8(-(ram))\n")
+	fmt.Printf("        add r26,%s\n", REGY) // add Y index
 	fmt.Printf("        adc r27,%s\n", REGZ)
 	fmt.Printf("        out 0x3f, %s\n", REGS)
-	fmt.Printf("        st X, %s\n", reg)
 	accessMap[addr] = true
+	accessMap[addr+1] = true
 }
 
 func loadZeroIndirectY(reg string, ins string) {
-	addr := nextByte()
-	fmt.Printf("lds r26,zero+0x%02x             ; %s ($%02x),Y\n", addr, ins, addr)
-	fmt.Printf("        lds r27,zero+0x%02x+1\n", addr)
-	fmt.Printf("        in %s, 0x3f\n", REGS)
-	fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
-	fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
-	fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
-	fmt.Printf("        sbci r27,hi8(-(ram))\n")
-	fmt.Printf("        add r26,%s\n", REGY) // add Y index
-	fmt.Printf("        adc r27,%s\n", REGZ)
-	fmt.Printf("        out 0x3f, %s\n", REGS)
+	zeroIndirectY(ins)
 	fmt.Printf("        ld %s, X\n", reg)
-	accessMap[addr] = true
-	accessMap[addr+1] = true
 }
 
 func storeZeroIndirectY(reg string, ins string) {
-	addr := nextByte()
-	fmt.Printf("lds r26,zero+0x%02x             ; %s ($%02x),Y\n", addr, ins, addr)
-	fmt.Printf("        lds r27,zero+0x%02x+1\n", addr)
-	fmt.Printf("        in %s, 0x3f\n", REGS)
-	fmt.Printf("        subi r26,lo8(0x%04x)\n", ramStart) // subtract data start
-	fmt.Printf("        sbci r27,hi8(0x%04x)\n", ramStart)
-	fmt.Printf("        subi r26,lo8(-(ram))\n") // add ram offset
-	fmt.Printf("        sbci r27,hi8(-(ram))\n")
-	fmt.Printf("        add r26,%s\n", REGY) // add Y index
-	fmt.Printf("        adc r27,%s\n", REGZ)
-	fmt.Printf("        out 0x3f, %s\n", REGS)
+	zeroIndirectY(ins)
 	fmt.Printf("        st X, %s\n", reg)
-	accessMap[addr] = true
-	accessMap[addr+1] = true
 }
 
 func absoluteUpdate(asm string, code string) {
