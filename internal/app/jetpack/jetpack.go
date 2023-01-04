@@ -754,11 +754,17 @@ func transcode(address uint16, stop uint16) {
 		case STX_ZY:
 			storeZeroIndexed(REGX, REGY, "STX", "Y")
 		case STY_A:
-			addr := nextWord()
-			if motr && addr == 0x83b6 {
+			if byteAt(pc+1) == 0xd4 {
+				addr := nextWord()
+				fmt.Printf("mov %s, %s                  ; STY $%04x (SID)\n", REGT, REGY, addr)
+				fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr&0xff)
+				fmt.Printf("        rcall sid_write\n")
+			} else if motr && wordAt(pc) == 0x83b6 {
+				addr := nextWord()
 				// STY $83b6 is known to update INC / DEC instructions - we will store this value at zero[0]
 				fmt.Printf("sts zero+0x%02x, %s            ; STY $%04x (SELF MODIFYING)\n", 0, REGY, addr)
 			} else {
+				addr := nextWord()
 				fmt.Printf("sts ram+0x%04x, %s           ; STY $%04x\n", addr-ramStart, REGY, addr)
 				checkSelfMod(addr)
 				accessMap[addr] = true
@@ -850,12 +856,12 @@ func zeroIndexed(indexReg string, ins string, insIndex string) {
 }
 
 func storeZeroIndexed(reg string, indexReg string, ins string, insIndex string) {
-	zeroIndexed(indexReg, ins, indexReg)
+	zeroIndexed(indexReg, ins, insIndex)
 	fmt.Printf("        st X, %s\n", reg)
 }
 
 func loadZeroIndexed(reg string, indexReg string, ins string, insIndex string) {
-	zeroIndexed(indexReg, ins, indexReg)
+	zeroIndexed(indexReg, ins, insIndex)
 	fmt.Printf("        ld %s, X\n", reg)
 }
 
@@ -865,7 +871,7 @@ func zeroIndirectX(ins string) {
 	fmt.Printf("ldi r26,lo8(zero)             ; %s ($%02x,X)\n", ins, addr)
 	fmt.Printf("        ldi r27,hi8(zero)\n")
 	fmt.Printf("        in %s, 0x3f\n", REGS)
-	fmt.Printf("        ldi %s, 0x%02\n", REGU, addr)
+	fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr)
 	fmt.Printf("        add r26,%s\n", REGU) // add addr to zero page
 	fmt.Printf("        adc r27,%s\n", REGZ)
 	fmt.Printf("        add r26,%s\n", REGX) // add X index
@@ -875,6 +881,7 @@ func zeroIndirectX(ins string) {
 	fmt.Printf("        out 0x3f, %s\n", REGS)
 	accessMap[addr] = true
 	accessMap[addr+1] = true
+	log.Fatalf("Implementation not complete: zeroIndirectX %s", ins)
 }
 
 func loadZeroIndirectX(reg string, ins string) {
