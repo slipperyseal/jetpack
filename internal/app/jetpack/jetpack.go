@@ -865,23 +865,23 @@ func loadZeroIndexed(reg string, indexReg string, ins string, insIndex string) {
 	fmt.Printf("        ld %s, X\n", reg)
 }
 
-// this is not correct - required indirect read
 func zeroIndirectX(ins string) {
 	addr := nextByte()
-	fmt.Printf("ldi r26,lo8(zero)             ; %s ($%02x,X)\n", ins, addr)
-	fmt.Printf("        ldi r27,hi8(zero)\n")
+	fmt.Printf("ldi r28,0x%02x                  ; %s ($%02x,X)\n", addr, ins, addr)
+	fmt.Printf("        mov r29,%s\n", REGZ)
 	fmt.Printf("        in %s, 0x3f\n", REGS)
-	fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr)
-	fmt.Printf("        add r26,%s\n", REGU) // add addr to zero page
-	fmt.Printf("        adc r27,%s\n", REGZ)
-	fmt.Printf("        add r26,%s\n", REGX) // add X index
-	fmt.Printf("        adc r27,%s\n", REGZ)
+	fmt.Printf("        add r28,%s\n", REGX)      // add X index with zero page wrap
+	fmt.Printf("        subi r28,lo8(-(zero))\n") // add zero page offset
+	fmt.Printf("        sbci r29,hi8(-(zero))\n")
+	fmt.Printf("        ld r26, Y+\n") // get indirect pointer to X
+	fmt.Printf("        ld r27, Y\n")
 	fmt.Printf("        subi r26,lo8(-(ram-0x%04x))\n", ramStart) // add ram offset
 	fmt.Printf("        sbci r27,hi8(-(ram-0x%04x))\n", ramStart)
 	fmt.Printf("        out 0x3f, %s\n", REGS)
-	accessMap[addr] = true
-	accessMap[addr+1] = true
-	log.Fatalf("Implementation not complete: zeroIndirectX %s", ins)
+	// indexed in zero page, so we might need the whole page
+	for index := int(addr); index < 0x100; index++ {
+		accessMap[index] = true
+	}
 }
 
 func loadZeroIndirectX(reg string, ins string) {
@@ -1009,7 +1009,7 @@ func transcodeBlocks() {
 			change = code
 		}
 	}
-	for index := 0; index < 0xff; index++ {
+	for index := 0; index < 0x100; index++ {
 		if accessMap[index] {
 			zeroPageLen = uint16(index) + 1
 		}
