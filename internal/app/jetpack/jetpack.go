@@ -519,10 +519,10 @@ func transcode(address uint16, stop uint16) {
 			fmt.Printf("inc %s                       ; INY\n", REGY)
 		case JMP_A:
 			addr := flattenJumpAddress(nextWord())
-			fmt.Printf("rjmp L%04x                    ; JMP $%04x\n", addr, addr)
+			fmt.Printf("jmp L%04x                     ; JMP $%04x\n", addr, addr)
 		case JSR_A:
 			addr := flattenJumpAddress(nextWord())
-			fmt.Printf("rcall L%04x                   ; JSR $%04x\n", addr, addr)
+			fmt.Printf("call L%04x                    ; JSR $%04x\n", addr, addr)
 		case LDA:
 			immediate("ldi", REGA, "LDA")
 			checkTest(REGA)
@@ -712,7 +712,7 @@ func transcode(address uint16, stop uint16) {
 				addr := nextWord()
 				fmt.Printf("mov %s, %s                  ; STA $%04x (SID)\n", REGT, REGA, addr)
 				fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr&0xff)
-				fmt.Printf("        rcall sid_write\n")
+				fmt.Printf("        call sid_write\n")
 			} else {
 				addr := nextWord()
 				fmt.Printf("sts ram+0x%04x, %s           ; STA $%04x\n", addr-ramStart, REGA, addr)
@@ -738,7 +738,7 @@ func transcode(address uint16, stop uint16) {
 				addr := nextWord()
 				fmt.Printf("mov %s, %s                  ; STX $%04x (SID)\n", REGT, REGX, addr)
 				fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr&0xff)
-				fmt.Printf("        rcall sid_write\n")
+				fmt.Printf("        call sid_write\n")
 			} else {
 				addr := nextWord()
 				fmt.Printf("sts ram+0x%04x, %s           ; STX $%04x\n", addr-ramStart, REGX, addr)
@@ -756,7 +756,7 @@ func transcode(address uint16, stop uint16) {
 				addr := nextWord()
 				fmt.Printf("mov %s, %s                  ; STY $%04x (SID)\n", REGT, REGY, addr)
 				fmt.Printf("        ldi %s, 0x%02x\n", REGU, addr&0xff)
-				fmt.Printf("        rcall sid_write\n")
+				fmt.Printf("        call sid_write\n")
 			} else if motr && wordAt(pc) == 0x83b6 {
 				addr := nextWord()
 				// STY $83b6 is known to update INC / DEC instructions - we will store this value at zero[0]
@@ -800,12 +800,12 @@ func checkTest(reg string) {
 
 func branch(branchIns string, ins string) {
 	addr := flattenJumpAddress(nextByteRelativeAddress())
-	// branching too far may require a longer range rjmp.
+	// branching too far may require a longer range jmp.
 	// the range of 16 isn't very scientific as our instructions are variable length.
 	if addr > pc+16 || addr < pc-16 {
 		fmt.Printf("%s 1f                       ; %s $%04x\n", branchIns, ins, addr)
 		fmt.Printf("        sbrc %s, 0\n", REGZ) // branch not taken so always skip next instruction (bit 0 in REGZ is clear)
-		fmt.Printf("1:      rjmp L%04x\n", addr)
+		fmt.Printf("1:      jmp L%04x\n", addr)
 	} else {
 		fmt.Printf("%s L%04x                    ; %s $%04x\n", branchIns, addr, ins, addr)
 	}
@@ -835,7 +835,7 @@ func storeIndexed(reg string, indexReg string, ins string, insIndex string) {
 		fmt.Printf("        in %s, 0x3f\n", REGS)
 		fmt.Printf("        add %s, %s\n", REGU, indexReg)
 		fmt.Printf("        out 0x3f, %s\n", REGS)
-		fmt.Printf("        rcall sid_write\n")
+		fmt.Printf("        call sid_write\n")
 		return
 	}
 	indexed(indexReg, ins, insIndex)

@@ -78,7 +78,7 @@ func writeMontyFunctions() {
 	fmt.Printf("        clr %s\n", REGX)
 	fmt.Printf("        clr %s\n", REGY)
 	fmt.Printf("        clr %s\n", REGZ)
-	fmt.Printf("        rjmp L%04x\n\n", flattenJumpAddress(sidHeader.InitAddress))
+	fmt.Printf("        jmp L%04x\n\n", flattenJumpAddress(sidHeader.InitAddress))
 
 	fmt.Printf(".global sid_play\n")
 	fmt.Printf("        .type sid_play, @function\n")
@@ -87,7 +87,7 @@ func writeMontyFunctions() {
 	fmt.Printf("        clr %s\n", REGX)
 	fmt.Printf("        clr %s\n", REGY)
 	fmt.Printf("        clr %s\n", REGZ)
-	fmt.Printf("        rjmp L%04x\n\n", flattenJumpAddress(sidHeader.PlayAddress))
+	fmt.Printf("        jmp L%04x\n\n", flattenJumpAddress(sidHeader.PlayAddress))
 
 	fmt.Printf("sid_write:\n")               // REGU = address, REGT = value
 	fmt.Printf("        out 0x5,%s\n", REGT) // PORTB 7 segment LED
