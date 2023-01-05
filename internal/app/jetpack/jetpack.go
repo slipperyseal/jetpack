@@ -20,20 +20,20 @@ var ramLen uint16                       // length of ram block
 var zeroPageLen uint16                  // often only the lower bit of zero page is used, so we track the highest read or write
 var totalInstructions = 0               // count total instructions translated
 var totalOpcodes = make(map[uint8]bool) // track op codes we've translated
-var codeMap [0x10000]bool               // code at this address
-var accessMap [0x10000]bool             // absolute or indexed access to this address
-var voidMap [0x10000]bool               // potentially eliminated code (if not in codeMap) but could have been kept on an alternate search.
-var jumpPoints = make(map[uint16]bool)
-var failOnSelfModifying bool // set to false to ignore self modifying code
-var printAllLabels bool      // print a label for each instruction, not just those needed for jumps and branches
-var motr bool                // handle special cases for Monty_on_the_Run.sid
 var opCodeMap = buildOpCodeMap()
+var codeMap [0x10000]bool   // code at this address
+var accessMap [0x10000]bool // absolute or indexed access to this address
+var voidMap [0x10000]bool   // potentially eliminated code (if not in codeMap) but could have been kept on an alternate search.
+var jumpPoints = make(map[uint16]bool)
+var allowSelfModifying bool // set to false to ignore self modifying code
+var printAllLabels bool     // print a label for each instruction, not just those needed for jumps and branches
+var motr bool               // handle special cases for Monty_on_the_Run.sid
 
-func BlastOff(path string, failOnSelfMod bool, printAllLab bool, writeBin bool, writeMemoryMap bool, ramBase uint16) {
-	failOnSelfModifying = failOnSelfMod
+func BlastOff(path string, allowSelfMod bool, printAllLab bool, writeBin bool, writeMemoryMap bool, ramBase uint16) {
+	allowSelfModifying = allowSelfMod
 	printAllLabels = printAllLab
 
-	motr = path == "Monty_on_the_Run.sid" // special handing for Monty yaa!
+	motr = filepath.Base(path) == "Monty_on_the_Run.sid" // special handing for Monty yaa!
 	if motr {
 		ramBase = 0x8400 // for Monty On The Run we know we can load ram from 8400
 	}
@@ -938,7 +938,7 @@ func immediate(immediateIns string, reg string, ins string) {
 }
 
 func checkSelfMod(addr uint16) {
-	if failOnSelfModifying && codeMap[addr] {
+	if !allowSelfModifying && codeMap[addr] {
 		log.Fatalf("SELF-MODIFYING CODE TO $%04x - PC $%04x\n", addr, pc)
 	}
 }
