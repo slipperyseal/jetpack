@@ -669,10 +669,8 @@ func transcode(address uint16, stop uint16) {
 			loadZeroIndexed(REGT, REGX, "ROR", "X")
 			fmt.Printf("        ror %s\n", REGT)
 			fmt.Printf("        st X, %s\n", REGT)
-		case RTI:
-			fmt.Printf("ret                           ; RTI\n") // assume ISR has been wrapped by JSR
-		case RTS:
-			fmt.Printf("ret                           ; RTS\n")
+		case RTI, RTS:
+			fmt.Printf("ret                           ; %s\n", opcode.ins)
 		case SBC:
 			value := nextByte()
 			fmt.Printf("sbci %s, 0x%02x                ; SBC #$%02x\n", REGA, value, value)

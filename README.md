@@ -4,10 +4,9 @@
 
 SID chip tunes are a block of 6502 code and data which actually run on a Commodore 64 or an emulator.
 Rather than try to squeeze a 6502 emulator on the AVR, Jetpack cross assembles the 6502 code to AVR assembler.
-Many of the 6502s 151 instructions are mapped to AVR assembler with writes the SID chip intercepted.
+Most of the 6502s 151 instructions are mapped to AVR assembler with writes the SID chip intercepted.
 Jetpack searches all execution paths to determine code block boundaries.
 Special cases are also implemented to deal with self-modifying code.
-Not all instructions are yet implemented and some instructions can't easily be supported.
 
 Jetpack was originally written to cross-compile a single SID, `Monty On The Run`,
 so it can play on the Monty Stereo SID Synth. Other SIDs have been successfully converted.
@@ -78,7 +77,7 @@ This was the main driver for the project. Emulation might be more accurate, but 
 
 - Can't cover all corner cases or self-modifying code that emulation can.
 
-- Not all opcodes supported. eg. JMP indirect, decimal mode, some special stack instructions.
+- Not all opcodes supported. eg. JMP indirect, decimal mode, stack pointer instructions.
 
 #### Example cross assembly
 
@@ -183,10 +182,10 @@ Reads and write addresses to zero page are tracked to narrow memory requirements
 There are indirect pointer instructions that allow placing pointers in zero page addresses.
 Often code will only use a small section of zero page for storing these indirect pointers.
 
-Another optimisation is to flatten indirect jumps. If a branch or jump simply points to another jump, the jump path is searched
+Another optimisation is to flatten chained jumps. If a branch or jump simply points to another jump, the jump path is searched
 for its final destination, and that location is substituted in the first branch or jump.
-Its more common than you think. Jump tables and where short range branches need to travel further, a branch to a long range jump is often used. 
-This flattening technique already eliminates a small code block  from the start of `Monty On The Run` and optimises several branch instructions.
+Its more common than you might think. Jump tables and where short range branches need to travel further, a branch to a long range jump is often used. 
+This flattening technique already eliminates a small code block from the start of `Monty On The Run` and optimises several branch instructions.
 
 As another dimension to this challenge, 6502 code would often be self-modifying.
 Code would swap out instructions or modify immediate instruction parameters which will be statically compiled for the AVR.
@@ -196,3 +195,7 @@ Other cases where translation may not function correctly is where the 6502 code 
 For example, saving the status register and testing bits within it. While Jetpack can `push` and `pop` the status register to the stack,
 it is the AVR status register, whose flags are in different locations.  6502 code which self-modifies jump or branch addresses
 would also be a problem.
+
+Jetpack also assumes all code paths are statically determinable. The Jump Indirect instruction is not
+implemented. Worst case, it would require a lookup table to map every 6502 RAM location to the
+AVR assembly location.
